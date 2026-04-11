@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <title>Email Sender</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: Inter, sans-serif;
+            background: linear-gradient(135deg,#1f2937,#0f172a);
+            color: #e5e7eb;
+            padding: 40px;
+        }
+        .container { max-width:1100px; margin:auto; }
+        h1 { font-size:28px; margin-bottom:20px; }
+        .card {
+            background:#111827;
+            border-radius:14px;
+            padding:20px;
+            margin-bottom:30px;
+            box-shadow:0 0 25px rgba(0,0,0,.4);
+        }
+        label { font-size:13px; opacity:.8; }
+        input, textarea, select {
+            width:100%;
+            padding:10px;
+            border-radius:8px;
+            border:none;
+            background:#1f2937;
+            color:white;
+            margin:6px 0 16px;
+        }
+        textarea { resize: vertical; }
+        .btns button {
+            padding:10px 16px;
+            border-radius:8px;
+            border:none;
+            cursor:pointer;
+            margin-right:8px;
+            font-weight:600;
+        }
+        .send { background:#22c55e; color:#052e16; }
+        .draft { background:#3b82f6; color:#05214f; }
+        table {
+            width:100%;
+            border-collapse:collapse;
+            font-size:14px;
+        }
+        th, td {
+            padding:10px;
+            border-bottom:1px solid #1f2937;
+        }
+        th { color:#9ca3af; text-align:left; }
+        a { color:#60a5fa; text-decoration:none; }
+    </style>
+
+    <script>
+        function fillFromTemplate() {
+            const s = document.getElementById("templateSelect");
+            const o = s.options[s.selectedIndex];
+            if (!o) return;
+            document.getElementById("subject").value = o.getAttribute("data-subject") || "";
+            document.getElementById("body").value = o.getAttribute("data-body") || "";
+        }
+    </script>
+</head>
+
+<body>
+<div class="container">
+
+    <h1>📨 Email Control Center</h1>
+
+    <!-- COMPOSE -->
+    <div class="card">
+        <h3>Compose</h3>
+        <form action="/send" method="post" enctype="multipart/form-data">
+
+            <label>Recipient</label>
+            <input name="to" type="email" required
+                   th:value="${selectedDraft!=null?selectedDraft.recipient:''}">
+
+            <label>Template</label>
+            <select id="templateSelect" onchange="fillFromTemplate()">
+                <option value="">Select Template</option>
+                <option th:each="t:${templates}"
+                        th:text="${t.subject}"
+                        th:attr="data-subject=${t.subject},data-body=${t.body}">
+                </option>
+            </select>
+
+            <label>Subject</label>
+            <input id="subject" name="subject" required
+                   th:value="${selectedDraft!=null?selectedDraft.subject:''}">
+
+            <label>Body</label>
+            <textarea id="body" name="body" rows="5"
+                      th:text="${selectedDraft!=null?selectedDraft.body:''}"></textarea>
+
+            <label>Attachment</label>
+            <input type="file" name="file">
+
+            <label>Send at</label>
+            <input type="datetime-local" name="scheduledTime">
+
+            <!-- important: pass draftId if editing -->
+            <input type="hidden" name="draftId"
+                   th:value="${selectedDraft!=null?selectedDraft.id:''}">
+
+            <div class="btns">
+                <button class="draft" type="submit" name="action" value="save">Save Draft</button>
+                <button class="send" type="submit" name="action" value="send">Send</button>
+            </div>
+
+        </form>
+    </div>
+
+    <!-- DRAFTS -->
+    <div class="card">
+        <h3>Drafts</h3>
+        <table>
+            <tr>
+                <th>To</th>
+                <th>Subject</th>
+                <th>Action</th>
+            </tr>
+            <tr th:each="d:${drafts}">
+                <td th:text="${d.recipient}"></td>
+                <td>
+                    <a th:href="@{/draft/{id}(id=${d.id})}"
+                       th:text="${d.subject}"></a>
+                </td>
+                <td>
+                    <form action="/send" method="post">
+                        <input type="hidden" name="draftId" th:value="${d.id}">
+                        <input type="hidden" name="to" th:value="${d.recipient}">
+                        <input type="hidden" name="subject" th:value="${d.subject}">
+                        <input type="hidden" name="body" th:value="${d.body}">
+                        <input type="hidden" name="action" value="send">
+                        <button class="send">Send</button>
+                    </form>
+                </td>
+            </tr>
+        </table>
+    </div>
+
+    <!-- SENT -->
+    <div class="card">
+        <h3>Sent Emails</h3>
+        <table>
+            <tr>
+                <th>To</th>
+                <th>Subject</th>
+                <th>Sent At</th>
+            </tr>
+            <tr th:each="s:${sentEmails}">
+                <td th:text="${s.recipient}"></td>
+                <td th:text="${s.subject}"></td>
+                <td th:text="${s.sentAt}"></td>
+            </tr>
+        </table>
+    </div>
+
+    <!-- SCHEDULED -->
+    <div class="card">
+        <h3>Scheduled Emails</h3>
+        <table>
+            <tr>
+                <th>To</th>
+                <th>Subject</th>
+                <th>Time</th>
+                <th>Status</th>
+            </tr>
+            <tr th:each="s:${scheduledEmails}">
+                <td th:text="${s.recipient}"></td>
+                <td th:text="${s.subject}"></td>
+                <td th:text="${s.scheduledTime}"></td>
+                <td th:text="${s.sent ? 'Sent' : 'Pending'}"></td>
+            </tr>
+        </table>
+    </div>
+
+</div>
+</body>
+</html>

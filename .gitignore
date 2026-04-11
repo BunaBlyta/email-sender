@@ -1,0 +1,26 @@
+# Secrets
+application-local.properties
+.env
+*.env
+
+# H2
+data/
+*.mv.db
+*.trace.db
+
+# Maven
+target/
+
+# IntelliJ
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
