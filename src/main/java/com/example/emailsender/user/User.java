@@ -1,7 +1,8 @@
 package com.example.emailsender.user;
 
 import jakarta.persistence.*;
-import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "users")
@@ -16,13 +17,8 @@ public class User {
     private String email;
     private String displayName;
 
-    @Enumerated(EnumType.STRING)
-    private Provider provider;
-
-    private String accessToken;
-    private String refreshToken;
-    private LocalDateTime tokenExpiry;
-    private LocalDateTime connectedAt;
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    private List<ConnectedAccount> connectedAccounts = new ArrayList<>();
 
     public User() {}
 
@@ -35,18 +31,6 @@ public class User {
     public String getDisplayName() { return displayName; }
     public void setDisplayName(String displayName) { this.displayName = displayName; }
 
-    public Provider getProvider() { return provider; }
-    public void setProvider(Provider provider) { this.provider = provider; }
-
-    public String getAccessToken() { return accessToken; }
-    public void setAccessToken(String accessToken) { this.accessToken = accessToken; }
-
-    public String getRefreshToken() { return refreshToken; }
-    public void setRefreshToken(String refreshToken) { this.refreshToken = refreshToken; }
-
-    public LocalDateTime getTokenExpiry() { return tokenExpiry; }
-    public void setTokenExpiry(LocalDateTime tokenExpiry) { this.tokenExpiry = tokenExpiry; }
-
-    public LocalDateTime getConnectedAt() { return connectedAt; }
-    public void setConnectedAt(LocalDateTime connectedAt) { this.connectedAt = connectedAt; }
+    public List<ConnectedAccount> getConnectedAccounts() { return connectedAccounts; }
+    public void setConnectedAccounts(List<ConnectedAccount> connectedAccounts) { this.connectedAccounts = connectedAccounts; }
 }

@@ -30,7 +30,6 @@ public class EmailSenderApplication {
                 User user = new User();
                 user.setEmail("test@example.com");
                 user.setDisplayName("Demo User");
-                user.setProvider(User.Provider.GMAIL);
                 userRepository.save(user);
                 System.out.println("Demo user created.");
             }

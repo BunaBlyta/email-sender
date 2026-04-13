@@ -10,6 +10,10 @@ public class MailThread {
 
     public enum ScreenerStatus { APPROVED, REJECTED, PENDING }
 
+    public enum WorkflowState { ACTIVE, AWAITING_REPLY, NEEDS_ACTION, DONE, ARCHIVED, SNOOZED }
+
+    public enum Category { PEOPLE, THINGS, NOISE }
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -29,6 +33,16 @@ public class MailThread {
 
     @Enumerated(EnumType.STRING)
     private ScreenerStatus screenerStatus;
+
+    @Enumerated(EnumType.STRING)
+    private WorkflowState workflowState = WorkflowState.ACTIVE;
+
+    private LocalDateTime snoozedUntil;
+
+    @Enumerated(EnumType.STRING)
+    private Category category;
+
+    private boolean categoryOverride = false;
 
     public MailThread() {}
 
@@ -58,4 +72,16 @@ public class MailThread {
 
     public ScreenerStatus getScreenerStatus() { return screenerStatus; }
     public void setScreenerStatus(ScreenerStatus screenerStatus) { this.screenerStatus = screenerStatus; }
+
+    public WorkflowState getWorkflowState() { return workflowState; }
+    public void setWorkflowState(WorkflowState workflowState) { this.workflowState = workflowState; }
+
+    public LocalDateTime getSnoozedUntil() { return snoozedUntil; }
+    public void setSnoozedUntil(LocalDateTime snoozedUntil) { this.snoozedUntil = snoozedUntil; }
+
+    public Category getCategory() { return category; }
+    public void setCategory(Category category) { this.category = category; }
+
+    public boolean isCategoryOverride() { return categoryOverride; }
+    public void setCategoryOverride(boolean categoryOverride) { this.categoryOverride = categoryOverride; }
 }
