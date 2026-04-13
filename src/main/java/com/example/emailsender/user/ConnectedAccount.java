@@ -19,7 +19,11 @@ public class ConnectedAccount {
     private User.Provider provider;
 
     private String accountEmail;
+
+    @Column(length = 2048)
     private String accessToken;
+
+    @Column(length = 2048)
     private String refreshToken;
     private LocalDateTime tokenExpiry;
     private LocalDateTime connectedAt;

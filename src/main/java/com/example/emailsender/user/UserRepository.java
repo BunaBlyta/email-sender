@@ -1,7 +1,8 @@
 package com.example.emailsender.user;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import java.util.Optional;
 
 public interface UserRepository extends JpaRepository<User, Long> {
-    // TODO: Find by email, find by provider
+    Optional<User> findByEmail(String email);
 }
