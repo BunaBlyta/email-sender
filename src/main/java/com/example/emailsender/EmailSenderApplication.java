@@ -6,6 +6,7 @@ import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
+import org.springframework.core.env.Environment;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 
@@ -13,9 +14,11 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 public class EmailSenderApplication {
 
     private final UserRepository userRepository;
+    private final Environment env;
 
-    public EmailSenderApplication(UserRepository userRepository) {
+    public EmailSenderApplication(UserRepository userRepository, Environment env) {
         this.userRepository = userRepository;
+        this.env = env;
     }
 
     public static void main(String[] args) {
@@ -33,6 +36,14 @@ public class EmailSenderApplication {
                 userRepository.save(user);
                 System.out.println("Demo user created.");
             }
+        };
+    }
+
+    @Bean
+    CommandLineRunner debugOAuthConfig() {
+        return args -> {
+            System.out.println("CLIENT ID: " + env.getProperty("GOOGLE_CLIENT_ID"));
+            System.out.println("CLIENT SECRET present: " + (env.getProperty("GOOGLE_CLIENT_SECRET") != null));
         };
     }
 
