@@ -40,14 +40,6 @@ public class EmailSenderApplication {
     }
 
     @Bean
-    CommandLineRunner debugOAuthConfig() {
-        return args -> {
-            System.out.println("CLIENT ID: " + env.getProperty("GOOGLE_CLIENT_ID"));
-            System.out.println("CLIENT SECRET present: " + (env.getProperty("GOOGLE_CLIENT_SECRET") != null));
-        };
-    }
-
-    @Bean
     public TaskScheduler taskScheduler() {
         ThreadPoolTaskScheduler scheduler = new ThreadPoolTaskScheduler();
         scheduler.setPoolSize(5);
