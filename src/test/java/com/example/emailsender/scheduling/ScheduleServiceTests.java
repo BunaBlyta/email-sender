@@ -148,7 +148,8 @@ class ScheduleServiceTests {
                 List.of("recipient@example.com"),
                 "Subject",
                 LocalDateTime.ofInstant(NOW, ZoneOffset.UTC),
-                true
+                true,
+                null
         ));
 
         scheduleService.sendClaimed(9L);

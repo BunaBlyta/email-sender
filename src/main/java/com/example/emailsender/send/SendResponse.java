@@ -10,6 +10,7 @@ public record SendResponse(
         List<String> recipients,
         String subject,
         LocalDateTime sentAt,
-        boolean scheduled
+        boolean scheduled,
+        AttachmentResponse attachment
 ) {
 }

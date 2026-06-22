@@ -25,6 +25,9 @@ public class SentMessage {
 
     private LocalDateTime sentAt;
     private boolean scheduled;
+    private String attachmentFilename;
+    private String attachmentMimeType;
+    private Long attachmentSizeBytes;
 
     public SentMessage() {}
 
@@ -62,4 +65,13 @@ public class SentMessage {
 
     public boolean isScheduled() { return scheduled; }
     public void setScheduled(boolean scheduled) { this.scheduled = scheduled; }
+
+    public String getAttachmentFilename() { return attachmentFilename; }
+    public void setAttachmentFilename(String attachmentFilename) { this.attachmentFilename = attachmentFilename; }
+
+    public String getAttachmentMimeType() { return attachmentMimeType; }
+    public void setAttachmentMimeType(String attachmentMimeType) { this.attachmentMimeType = attachmentMimeType; }
+
+    public Long getAttachmentSizeBytes() { return attachmentSizeBytes; }
+    public void setAttachmentSizeBytes(Long attachmentSizeBytes) { this.attachmentSizeBytes = attachmentSizeBytes; }
 }

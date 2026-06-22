@@ -13,8 +13,11 @@ import com.google.api.services.gmail.model.ListThreadsResponse;
 import com.google.api.services.gmail.model.Thread;
 import jakarta.mail.internet.MimeUtility;
 import jakarta.mail.Session;
+import jakarta.mail.internet.MimeBodyPart;
 import jakarta.mail.internet.InternetAddress;
 import jakarta.mail.internet.MimeMessage;
+import jakarta.mail.internet.MimeMultipart;
+import jakarta.mail.util.ByteArrayDataSource;
 import org.springframework.stereotype.Service;
 
 import java.io.ByteArrayOutputStream;
@@ -130,29 +133,39 @@ public class GmailProvider implements MailProvider {
     public MailSendResult sendMessage(
             User user, List<String> recipients, String subject, String body) {
         try {
-            MimeMessage mimeMessage = createMimeMessage(user, recipients, subject, body);
-            ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-            mimeMessage.writeTo(outputStream);
-
-            com.google.api.services.gmail.model.Message gmailMessage =
-                    new com.google.api.services.gmail.model.Message();
-            gmailMessage.setRaw(Base64.getUrlEncoder()
-                    .withoutPadding()
-                    .encodeToString(outputStream.toByteArray()));
-
-            com.google.api.services.gmail.model.Message sentMessage =
-                    buildGmailClient(user).users().messages()
-                            .send("me", gmailMessage)
-                            .execute();
-
-            return new MailSendResult(sentMessage.getId(), sentMessage.getThreadId());
+            return sendMimeMessage(
+                    user,
+                    createMimeMessage(user, recipients, subject, body, null)
+            );
         } catch (Exception exception) {
             throw new MailProviderException("Failed to send Gmail message", exception);
         }
     }
 
+    @Override
+    public MailSendResult sendMessageWithAttachment(
+            User user,
+            List<String> recipients,
+            String subject,
+            String body,
+            OutgoingAttachment attachment) {
+        try {
+            return sendMimeMessage(
+                    user,
+                    createMimeMessage(user, recipients, subject, body, attachment)
+            );
+        } catch (Exception exception) {
+            throw new MailProviderException(
+                    "Failed to send Gmail message with attachment", exception);
+        }
+    }
+
     private MimeMessage createMimeMessage(
-            User user, List<String> recipients, String subject, String body) throws Exception {
+            User user,
+            List<String> recipients,
+            String subject,
+            String body,
+            OutgoingAttachment attachment) throws Exception {
         MimeMessage message = new MimeMessage(Session.getInstance(new Properties()));
         message.setFrom(new InternetAddress(user.getEmail()));
         for (String recipient : recipients) {
@@ -162,8 +175,48 @@ public class GmailProvider implements MailProvider {
             );
         }
         message.setSubject(subject, StandardCharsets.UTF_8.name());
-        message.setText(body, StandardCharsets.UTF_8.name());
+
+        if (attachment == null) {
+            message.setText(body, StandardCharsets.UTF_8.name());
+            return message;
+        }
+
+        MimeBodyPart bodyPart = new MimeBodyPart();
+        bodyPart.setText(body, StandardCharsets.UTF_8.name());
+
+        MimeBodyPart attachmentPart = new MimeBodyPart();
+        attachmentPart.setDataHandler(new jakarta.activation.DataHandler(
+                new ByteArrayDataSource(attachment.content(), attachment.contentType())
+        ));
+        attachmentPart.setFileName(MimeUtility.encodeText(
+                attachment.filename(),
+                StandardCharsets.UTF_8.name(),
+                null
+        ));
+
+        MimeMultipart multipart = new MimeMultipart();
+        multipart.addBodyPart(bodyPart);
+        multipart.addBodyPart(attachmentPart);
+        message.setContent(multipart);
         return message;
+    }
+
+    private MailSendResult sendMimeMessage(User user, MimeMessage mimeMessage)
+            throws Exception {
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+        mimeMessage.writeTo(outputStream);
+
+        com.google.api.services.gmail.model.Message gmailMessage =
+                new com.google.api.services.gmail.model.Message();
+        gmailMessage.setRaw(Base64.getUrlEncoder()
+                .withoutPadding()
+                .encodeToString(outputStream.toByteArray()));
+
+        com.google.api.services.gmail.model.Message sentMessage =
+                buildGmailClient(user).users().messages()
+                        .send("me", gmailMessage)
+                        .execute();
+        return new MailSendResult(sentMessage.getId(), sentMessage.getThreadId());
     }
 
     private Gmail buildGmailClient(User user)

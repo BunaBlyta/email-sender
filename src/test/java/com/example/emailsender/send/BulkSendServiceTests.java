@@ -139,7 +139,8 @@ class BulkSendServiceTests {
                 List.of(recipient),
                 "Update",
                 LocalDateTime.of(2026, 6, 22, 15, 0),
-                false
+                false,
+                null
         );
     }
 }

@@ -6,8 +6,10 @@ import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping("/send")
@@ -28,6 +30,16 @@ public class SendController {
             @RequestBody SendRequest request) {
         String email = principal.getAttribute("email");
         return sendService.send(email, request);
+    }
+
+    @PostMapping(path = "/attachment", consumes = "multipart/form-data")
+    @ResponseStatus(HttpStatus.CREATED)
+    public SendResponse sendWithAttachment(
+            @AuthenticationPrincipal OAuth2User principal,
+            @RequestPart("message") SendRequest request,
+            @RequestPart("file") MultipartFile file) {
+        String email = principal.getAttribute("email");
+        return sendService.sendWithAttachment(email, request, file);
     }
 
     @PostMapping("/bulk")

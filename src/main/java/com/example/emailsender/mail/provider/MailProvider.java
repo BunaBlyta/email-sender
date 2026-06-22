@@ -13,4 +13,11 @@ public interface MailProvider {
     List<Message> fetchMessages(User user, String threadId);
 
     MailSendResult sendMessage(User user, List<String> recipients, String subject, String body);
+
+    MailSendResult sendMessageWithAttachment(
+            User user,
+            List<String> recipients,
+            String subject,
+            String body,
+            OutgoingAttachment attachment);
 }

@@ -27,6 +27,16 @@ public class OutlookProvider implements MailProvider {
         throw unsupported();
     }
 
+    @Override
+    public MailSendResult sendMessageWithAttachment(
+            User user,
+            List<String> recipients,
+            String subject,
+            String body,
+            OutgoingAttachment attachment) {
+        throw unsupported();
+    }
+
     private MailProviderException unsupported() {
         return new MailProviderException("Outlook support is not implemented");
     }

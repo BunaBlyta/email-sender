@@ -29,6 +29,7 @@ class SendServiceTests {
     private UserRepository userRepository;
     private GmailProvider gmailProvider;
     private SentMessageRepository sentMessageRepository;
+    private AttachmentValidator attachmentValidator;
     private SendService sendService;
 
     @BeforeEach
@@ -36,6 +37,7 @@ class SendServiceTests {
         userRepository = mock(UserRepository.class);
         gmailProvider = mock(GmailProvider.class);
         sentMessageRepository = mock(SentMessageRepository.class);
+        attachmentValidator = new AttachmentValidator();
         Clock clock = Clock.fixed(
                 Instant.parse("2026-06-22T13:00:00Z"),
                 ZoneOffset.UTC
@@ -45,7 +47,58 @@ class SendServiceTests {
                 gmailProvider,
                 new ComposeValidator(),
                 sentMessageRepository,
+                attachmentValidator,
                 clock
+        );
+    }
+
+    @Test
+    void sendsValidatedAttachmentAndPersistsMetadata() {
+        User user = new User();
+        user.setEmail("sender@example.com");
+        byte[] content = "test document".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        org.springframework.mock.web.MockMultipartFile file =
+                new org.springframework.mock.web.MockMultipartFile(
+                        "file",
+                        "../report.txt",
+                        "text/plain",
+                        content
+                );
+        when(userRepository.findByEmail("sender@example.com"))
+                .thenReturn(Optional.of(user));
+        when(gmailProvider.sendMessageWithAttachment(
+                org.mockito.ArgumentMatchers.eq(user),
+                org.mockito.ArgumentMatchers.eq(List.of("recipient@example.com")),
+                org.mockito.ArgumentMatchers.eq("Project update"),
+                org.mockito.ArgumentMatchers.eq("Ready for review."),
+                any()
+        )).thenReturn(new MailSendResult("message-attachment", "thread-attachment"));
+        when(sentMessageRepository.save(any(SentMessage.class)))
+                .thenAnswer(invocation -> {
+                    SentMessage message = invocation.getArgument(0);
+                    message.setId(11L);
+                    return message;
+                });
+
+        SendResponse response = sendService.sendWithAttachment(
+                "sender@example.com",
+                new SendRequest(
+                        List.of("recipient@example.com"),
+                        "Project update",
+                        "Ready for review."
+                ),
+                file
+        );
+
+        assertEquals("report.txt", response.attachment().filename());
+        assertEquals("text/plain", response.attachment().contentType());
+        assertEquals(content.length, response.attachment().sizeBytes());
+        verify(gmailProvider).sendMessageWithAttachment(
+                org.mockito.ArgumentMatchers.eq(user),
+                org.mockito.ArgumentMatchers.eq(List.of("recipient@example.com")),
+                org.mockito.ArgumentMatchers.eq("Project update"),
+                org.mockito.ArgumentMatchers.eq("Ready for review."),
+                any()
         );
     }
 
