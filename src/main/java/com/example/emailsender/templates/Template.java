@@ -11,17 +11,22 @@ public class Template {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne
+    @ManyToOne(optional = false)
+    @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
+    @Column(nullable = false)
     private String name;
+
+    @Column(nullable = false)
     private String subject;
 
-    @Column(length = 5000)
+    @Column(nullable = false, length = 5000)
     private String body;
 
     private String category;
     private int usageCount;
+    @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
     public Template() {}
