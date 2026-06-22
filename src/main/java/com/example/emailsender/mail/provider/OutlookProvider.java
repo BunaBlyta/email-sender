@@ -1,8 +1,33 @@
 package com.example.emailsender.mail.provider;
 
+import com.example.emailsender.mail.model.MailThread;
+import com.example.emailsender.mail.model.Message;
+import com.example.emailsender.shared.exception.MailProviderException;
+import com.example.emailsender.user.User;
 import org.springframework.stereotype.Component;
+
+import java.util.List;
 
 @Component
 public class OutlookProvider implements MailProvider {
-    // TODO: Implement Outlook/Microsoft 365 mail operations using Microsoft Graph API
+
+    @Override
+    public List<MailThread> fetchThreads(User user, int maxResults) {
+        throw unsupported();
+    }
+
+    @Override
+    public List<Message> fetchMessages(User user, String threadId) {
+        throw unsupported();
+    }
+
+    @Override
+    public MailSendResult sendMessage(
+            User user, List<String> recipients, String subject, String body) {
+        throw unsupported();
+    }
+
+    private MailProviderException unsupported() {
+        return new MailProviderException("Outlook support is not implemented");
+    }
 }

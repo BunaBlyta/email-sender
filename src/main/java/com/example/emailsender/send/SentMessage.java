@@ -1,5 +1,6 @@
 package com.example.emailsender.send;
 
+import com.example.emailsender.user.User;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
@@ -10,6 +11,12 @@ public class SentMessage {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @ManyToOne(optional = false)
+    @JoinColumn(name = "user_id", nullable = false)
+    private User user;
+
+    private String externalMessageId;
+    private String externalThreadId;
     private String recipient;
     private String subject;
 
@@ -31,6 +38,15 @@ public class SentMessage {
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
+
+    public User getUser() { return user; }
+    public void setUser(User user) { this.user = user; }
+
+    public String getExternalMessageId() { return externalMessageId; }
+    public void setExternalMessageId(String externalMessageId) { this.externalMessageId = externalMessageId; }
+
+    public String getExternalThreadId() { return externalThreadId; }
+    public void setExternalThreadId(String externalThreadId) { this.externalThreadId = externalThreadId; }
 
     public String getRecipient() { return recipient; }
     public void setRecipient(String recipient) { this.recipient = recipient; }

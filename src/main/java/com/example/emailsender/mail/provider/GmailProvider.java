@@ -3,6 +3,7 @@ package com.example.emailsender.mail.provider;
 import com.example.emailsender.auth.TokenStore;
 import com.example.emailsender.mail.model.MailThread;
 import com.example.emailsender.mail.model.Message;
+import com.example.emailsender.shared.exception.MailProviderException;
 import com.example.emailsender.user.User;
 import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport;
 import com.google.api.client.json.gson.GsonFactory;
@@ -11,8 +12,12 @@ import com.google.api.services.gmail.model.MessagePartHeader;
 import com.google.api.services.gmail.model.ListThreadsResponse;
 import com.google.api.services.gmail.model.Thread;
 import jakarta.mail.internet.MimeUtility;
+import jakarta.mail.Session;
+import jakarta.mail.internet.InternetAddress;
+import jakarta.mail.internet.MimeMessage;
 import org.springframework.stereotype.Service;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.security.GeneralSecurityException;
 import java.nio.charset.Charset;
@@ -25,6 +30,8 @@ import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.Base64;
+import java.util.Properties;
 
 @Service
 public class GmailProvider implements MailProvider {
@@ -35,6 +42,7 @@ public class GmailProvider implements MailProvider {
         this.tokenStore = tokenStore;
     }
 
+    @Override
     public List<MailThread> fetchThreads(User user, int maxResults) {
         try {
             String accessToken = tokenStore.getValidAccessToken(user);
@@ -85,6 +93,7 @@ public class GmailProvider implements MailProvider {
         }
     }
 
+    @Override
     public List<Message> fetchMessages(User user, String threadId) {
         try {
             String accessToken = tokenStore.getValidAccessToken(user);
@@ -115,6 +124,56 @@ public class GmailProvider implements MailProvider {
         } catch (IOException | GeneralSecurityException e) {
             throw new RuntimeException("Failed to fetch messages", e);
         }
+    }
+
+    @Override
+    public MailSendResult sendMessage(
+            User user, List<String> recipients, String subject, String body) {
+        try {
+            MimeMessage mimeMessage = createMimeMessage(user, recipients, subject, body);
+            ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+            mimeMessage.writeTo(outputStream);
+
+            com.google.api.services.gmail.model.Message gmailMessage =
+                    new com.google.api.services.gmail.model.Message();
+            gmailMessage.setRaw(Base64.getUrlEncoder()
+                    .withoutPadding()
+                    .encodeToString(outputStream.toByteArray()));
+
+            com.google.api.services.gmail.model.Message sentMessage =
+                    buildGmailClient(user).users().messages()
+                            .send("me", gmailMessage)
+                            .execute();
+
+            return new MailSendResult(sentMessage.getId(), sentMessage.getThreadId());
+        } catch (Exception exception) {
+            throw new MailProviderException("Failed to send Gmail message", exception);
+        }
+    }
+
+    private MimeMessage createMimeMessage(
+            User user, List<String> recipients, String subject, String body) throws Exception {
+        MimeMessage message = new MimeMessage(Session.getInstance(new Properties()));
+        message.setFrom(new InternetAddress(user.getEmail()));
+        for (String recipient : recipients) {
+            message.addRecipient(
+                    jakarta.mail.Message.RecipientType.TO,
+                    new InternetAddress(recipient)
+            );
+        }
+        message.setSubject(subject, StandardCharsets.UTF_8.name());
+        message.setText(body, StandardCharsets.UTF_8.name());
+        return message;
+    }
+
+    private Gmail buildGmailClient(User user)
+            throws GeneralSecurityException, IOException {
+        String accessToken = tokenStore.getValidAccessToken(user);
+        return new Gmail.Builder(
+                GoogleNetHttpTransport.newTrustedTransport(),
+                GsonFactory.getDefaultInstance(),
+                request -> request.getHeaders().setAuthorization("Bearer " + accessToken)
+        ).setApplicationName("email-platform").build();
     }
 
     private String getHeader(com.google.api.services.gmail.model.Message message, String name) {
