@@ -53,6 +53,24 @@ public class SendService {
 
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new IllegalArgumentException("User not found: " + email));
+        return sendForUser(user, recipients, subject, body, false);
+    }
+
+    public SendResponse sendScheduled(
+            User user, List<String> recipients, String subject, String body) {
+        ValidationResult validation = composeValidator.validate(recipients, subject, body);
+        if (!validation.isValid()) {
+            throw new ComposeValidationException(validation.getErrors());
+        }
+        return sendForUser(user, recipients, subject, body, true);
+    }
+
+    private SendResponse sendForUser(
+            User user,
+            List<String> recipients,
+            String subject,
+            String body,
+            boolean scheduled) {
         MailSendResult providerResult =
                 gmailProvider.sendMessage(user, recipients, subject, body);
 
@@ -64,7 +82,7 @@ public class SendService {
         sentMessage.setSubject(subject);
         sentMessage.setBody(body);
         sentMessage.setSentAt(LocalDateTime.now(clock));
-        sentMessage.setScheduled(false);
+        sentMessage.setScheduled(scheduled);
 
         SentMessage saved = sentMessageRepository.save(sentMessage);
         return new SendResponse(
