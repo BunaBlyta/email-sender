@@ -44,7 +44,8 @@ public class SecurityConfig {
                                 "/inbox/**",
                                 "/send/**",
                                 "/templates/**",
-                                "/scheduled/**"
+                                "/scheduled/**",
+                                "/recipient-groups/**"
                         ).authenticated()
                         .anyRequest().permitAll()
                 )

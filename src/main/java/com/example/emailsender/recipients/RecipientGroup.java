@@ -2,6 +2,7 @@ package com.example.emailsender.recipients;
 
 import com.example.emailsender.user.User;
 import jakarta.persistence.*;
+import java.util.ArrayList;
 import java.util.List;
 
 @Entity
@@ -11,13 +12,20 @@ public class RecipientGroup {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne
+    @ManyToOne(optional = false)
+    @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
+    @Column(nullable = false)
     private String name;
 
-    @ElementCollection
-    private List<String> members;
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(
+            name = "recipient_group_members",
+            joinColumns = @JoinColumn(name = "recipient_group_id")
+    )
+    @Column(name = "email", nullable = false)
+    private List<String> members = new ArrayList<>();
 
     public RecipientGroup() {}
 
