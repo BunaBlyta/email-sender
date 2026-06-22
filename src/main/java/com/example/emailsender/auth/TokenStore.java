@@ -36,10 +36,14 @@ public class TokenStore {
                 .findFirst()
                 .orElseThrow(() -> new RuntimeException("No Gmail account connected for user: " + user.getEmail()));
 
-        if (account.getTokenExpiry() != null && account.getTokenExpiry().isBefore(LocalDateTime.now())) {
+        if (account.getTokenExpiry() != null
+                && account.getTokenExpiry().isBefore(LocalDateTime.now(java.time.Clock.systemUTC()))) {
+            if (account.getRefreshToken() == null || account.getRefreshToken().isBlank()) {
+                throw new RuntimeException("Gmail authorization expired; reconnect the account");
+            }
             String newAccessToken = refreshAccessToken(account.getRefreshToken());
             account.setAccessToken(newAccessToken);
-            account.setTokenExpiry(LocalDateTime.now().plusHours(1));
+            account.setTokenExpiry(LocalDateTime.now(java.time.Clock.systemUTC()).plusHours(1));
             connectedAccountRepository.save(account);
         }
 
@@ -49,6 +53,9 @@ public class TokenStore {
     public String refreshAccessToken(String refreshToken) {
         String clientId = env.getProperty("GOOGLE_CLIENT_ID");
         String clientSecret = env.getProperty("GOOGLE_CLIENT_SECRET");
+        if (clientId == null || clientSecret == null) {
+            throw new IllegalStateException("Google OAuth client credentials are not configured");
+        }
 
         String body = "grant_type=refresh_token"
                 + "&refresh_token=" + URLEncoder.encode(refreshToken, StandardCharsets.UTF_8)
@@ -68,12 +75,17 @@ public class TokenStore {
 
             ObjectMapper mapper = new ObjectMapper();
             JsonNode root = mapper.readTree(responseBody);
-            if (root.has("error")) {
-                throw new RuntimeException("Token refresh failed: " + root.get("error").asText());
+            if (response.statusCode() < 200 || response.statusCode() >= 300 || root.has("error")) {
+                String error = root.has("error")
+                        ? root.get("error").asText()
+                        : "HTTP " + response.statusCode();
+                throw new RuntimeException("Token refresh failed: " + error);
             }
-            String newAccessToken = root.get("access_token").asText();
-            return newAccessToken;
+            return root.get("access_token").asText();
         } catch (IOException | InterruptedException e) {
+            if (e instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
             throw new RuntimeException("Failed to refresh token", e);
         }
     }

@@ -55,8 +55,6 @@ public class OAuthService {
 
         if (authorizedClient.getRefreshToken() != null) {
             account.setRefreshToken(authorizedClient.getRefreshToken().getTokenValue());
-        } else {
-            account.setRefreshToken(null);
         }
 
         Instant expiresAt = authorizedClient.getAccessToken().getExpiresAt();

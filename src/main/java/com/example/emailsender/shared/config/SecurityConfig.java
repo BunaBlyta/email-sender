@@ -40,6 +40,7 @@ public class SecurityConfig {
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
                 .authorizeHttpRequests(auth -> auth
+                        .requestMatchers("/inbox/**").authenticated()
                         .anyRequest().permitAll()
                 )
                 .oauth2Login(oauth2 -> oauth2
@@ -52,10 +53,10 @@ public class SecurityConfig {
                                     .loadAuthorizedClient(
                                             oauthToken.getAuthorizedClientRegistrationId(),
                                             oauthToken.getName()
-                                    );
+                            );
 
                             oauthService.handleOAuthSuccess(principal, authorizedClient);
-                            response.sendRedirect("/inbox");
+                            response.sendRedirect("/inbox/threads");
                         })
                         .authorizationEndpoint(authorization -> authorization
                                 .authorizationRequestResolver(noPkceResolver())
@@ -76,6 +77,8 @@ public class SecurityConfig {
                 customizer.additionalParameters(params -> {
                     params.remove("code_challenge");
                     params.remove("code_challenge_method");
+                    params.put("access_type", "offline");
+                    params.put("prompt", "consent");
                 })
         );
         return resolver;
