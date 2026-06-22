@@ -87,6 +87,27 @@ public class RecipientService {
         return findOwnedGroup(findUser(email), id);
     }
 
+    @Transactional(readOnly = true)
+    public List<String> resolveMembers(String email, List<Long> groupIds) {
+        User user = findUser(email);
+        if (groupIds == null || groupIds.isEmpty()) {
+            throw new IllegalArgumentException("At least one recipient group is required");
+        }
+
+        Map<String, String> uniqueMembers = new LinkedHashMap<>();
+        for (Long groupId : groupIds) {
+            RecipientGroup group = findOwnedGroup(user, groupId);
+            for (String member : group.getMembers()) {
+                uniqueMembers.putIfAbsent(member.toLowerCase(Locale.ROOT), member);
+            }
+        }
+        if (uniqueMembers.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "Selected recipient groups do not contain any members");
+        }
+        return List.copyOf(uniqueMembers.values());
+    }
+
     private User findUser(String email) {
         if (email == null || email.isBlank()) {
             throw new IllegalArgumentException("Authenticated user has no email address");

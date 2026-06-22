@@ -14,9 +14,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class SendController {
 
     private final SendService sendService;
+    private final BulkSendService bulkSendService;
 
-    public SendController(SendService sendService) {
+    public SendController(SendService sendService, BulkSendService bulkSendService) {
         this.sendService = sendService;
+        this.bulkSendService = bulkSendService;
     }
 
     @PostMapping
@@ -26,5 +28,13 @@ public class SendController {
             @RequestBody SendRequest request) {
         String email = principal.getAttribute("email");
         return sendService.send(email, request);
+    }
+
+    @PostMapping("/bulk")
+    public BulkSendResponse sendBulk(
+            @AuthenticationPrincipal OAuth2User principal,
+            @RequestBody BulkSendRequest request) {
+        String email = principal.getAttribute("email");
+        return bulkSendService.send(email, request);
     }
 }

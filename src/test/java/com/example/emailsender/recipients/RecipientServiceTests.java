@@ -123,6 +123,32 @@ class RecipientServiceTests {
         );
     }
 
+    @Test
+    void resolvesAndDeduplicatesMembersAcrossOwnedGroups() {
+        RecipientGroup first = group(
+                1L,
+                "First",
+                List.of("one@example.com", "shared@example.com")
+        );
+        RecipientGroup second = group(
+                2L,
+                "Second",
+                List.of("SHARED@example.com", "two@example.com")
+        );
+        when(recipientGroupRepository.findByIdAndUser(1L, user))
+                .thenReturn(Optional.of(first));
+        when(recipientGroupRepository.findByIdAndUser(2L, user))
+                .thenReturn(Optional.of(second));
+
+        List<String> members =
+                recipientService.resolveMembers("user@example.com", List.of(1L, 2L));
+
+        assertEquals(
+                List.of("one@example.com", "shared@example.com", "two@example.com"),
+                members
+        );
+    }
+
     private RecipientGroup group(Long id, String name, List<String> members) {
         RecipientGroup group = new RecipientGroup();
         group.setId(id);

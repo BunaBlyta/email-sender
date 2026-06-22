@@ -65,6 +65,16 @@ public class SendService {
         return sendForUser(user, recipients, subject, body, true);
     }
 
+    public SendResponse sendBulkRecipient(
+            User user, String recipient, String subject, String body) {
+        List<String> recipients = List.of(recipient);
+        ValidationResult validation = composeValidator.validate(recipients, subject, body);
+        if (!validation.isValid()) {
+            throw new ComposeValidationException(validation.getErrors());
+        }
+        return sendForUser(user, recipients, subject, body, false);
+    }
+
     private SendResponse sendForUser(
             User user,
             List<String> recipients,
