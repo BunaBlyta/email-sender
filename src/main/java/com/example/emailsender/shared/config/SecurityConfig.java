@@ -45,8 +45,10 @@ public class SecurityConfig {
                                 "/send/**",
                                 "/templates/**",
                                 "/scheduled/**",
-                                "/recipient-groups/**"
+                                "/recipient-groups/**",
+                                "/tracking/**"
                         ).authenticated()
+                        .requestMatchers("/track/**").permitAll()
                         .anyRequest().permitAll()
                 )
                 .oauth2Login(oauth2 -> oauth2

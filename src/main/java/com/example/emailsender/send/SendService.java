@@ -3,6 +3,7 @@ package com.example.emailsender.send;
 import com.example.emailsender.mail.provider.GmailProvider;
 import com.example.emailsender.mail.provider.MailSendResult;
 import com.example.emailsender.mail.provider.OutgoingAttachment;
+import com.example.emailsender.tracking.TrackingService;
 import com.example.emailsender.user.User;
 import com.example.emailsender.user.UserRepository;
 import com.example.emailsender.validation.ComposeValidator;
@@ -21,6 +22,7 @@ public class SendService {
     private final ComposeValidator composeValidator;
     private final SentMessageRepository sentMessageRepository;
     private final AttachmentValidator attachmentValidator;
+    private final TrackingService trackingService;
     private final Clock clock;
 
     public SendService(
@@ -29,12 +31,14 @@ public class SendService {
             ComposeValidator composeValidator,
             SentMessageRepository sentMessageRepository,
             AttachmentValidator attachmentValidator,
+            TrackingService trackingService,
             Clock clock) {
         this.userRepository = userRepository;
         this.gmailProvider = gmailProvider;
         this.composeValidator = composeValidator;
         this.sentMessageRepository = sentMessageRepository;
         this.attachmentValidator = attachmentValidator;
+        this.trackingService = trackingService;
         this.clock = clock;
     }
 
@@ -57,7 +61,8 @@ public class SendService {
 
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new IllegalArgumentException("User not found: " + email));
-        return sendForUser(user, recipients, subject, body, false, null);
+        return sendForUser(
+                user, recipients, subject, body, false, null, request.isTrackingEnabled());
     }
 
     public SendResponse sendWithAttachment(
@@ -82,7 +87,15 @@ public class SendService {
         OutgoingAttachment attachment = attachmentValidator.validate(file);
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new IllegalArgumentException("User not found: " + email));
-        return sendForUser(user, recipients, subject, body, false, attachment);
+        return sendForUser(
+                user,
+                recipients,
+                subject,
+                body,
+                false,
+                attachment,
+                request.isTrackingEnabled()
+        );
     }
 
     public SendResponse sendScheduled(
@@ -91,7 +104,7 @@ public class SendService {
         if (!validation.isValid()) {
             throw new ComposeValidationException(validation.getErrors());
         }
-        return sendForUser(user, recipients, subject, body, true, null);
+        return sendForUser(user, recipients, subject, body, true, null, false);
     }
 
     public SendResponse sendBulkRecipient(
@@ -101,7 +114,7 @@ public class SendService {
         if (!validation.isValid()) {
             throw new ComposeValidationException(validation.getErrors());
         }
-        return sendForUser(user, recipients, subject, body, false, null);
+        return sendForUser(user, recipients, subject, body, false, null, false);
     }
 
     private SendResponse sendForUser(
@@ -110,11 +123,13 @@ public class SendService {
             String subject,
             String body,
             boolean scheduled,
-            OutgoingAttachment attachment) {
-        MailSendResult providerResult = attachment == null
-                ? gmailProvider.sendMessage(user, recipients, subject, body)
-                : gmailProvider.sendMessageWithAttachment(
-                        user, recipients, subject, body, attachment);
+            OutgoingAttachment attachment,
+            boolean trackingEnabled) {
+        TrackingService.TrackedBody trackedBody = trackingEnabled
+                ? trackingService.createTrackedBody(body)
+                : null;
+        MailSendResult providerResult = sendThroughProvider(
+                user, recipients, subject, body, attachment, trackedBody);
 
         SentMessage sentMessage = new SentMessage();
         sentMessage.setUser(user);
@@ -125,6 +140,10 @@ public class SendService {
         sentMessage.setBody(body);
         sentMessage.setSentAt(LocalDateTime.now(clock));
         sentMessage.setScheduled(scheduled);
+        sentMessage.setTrackingEnabled(trackingEnabled);
+        if (trackedBody != null) {
+            sentMessage.setTrackingId(trackedBody.trackingId());
+        }
         if (attachment != null) {
             sentMessage.setAttachmentFilename(attachment.filename());
             sentMessage.setAttachmentMimeType(attachment.contentType());
@@ -140,8 +159,31 @@ public class SendService {
                 saved.getSubject(),
                 saved.getSentAt(),
                 saved.isScheduled(),
-                attachmentResponse(saved)
+                attachmentResponse(saved),
+                trackingService.toResponse(saved)
         );
+    }
+
+    private MailSendResult sendThroughProvider(
+            User user,
+            List<String> recipients,
+            String subject,
+            String body,
+            OutgoingAttachment attachment,
+            TrackingService.TrackedBody trackedBody) {
+        if (trackedBody != null && attachment != null) {
+            return gmailProvider.sendHtmlMessageWithAttachment(
+                    user, recipients, subject, trackedBody.htmlBody(), attachment);
+        }
+        if (trackedBody != null) {
+            return gmailProvider.sendHtmlMessage(
+                    user, recipients, subject, trackedBody.htmlBody());
+        }
+        if (attachment != null) {
+            return gmailProvider.sendMessageWithAttachment(
+                    user, recipients, subject, body, attachment);
+        }
+        return gmailProvider.sendMessage(user, recipients, subject, body);
     }
 
     private AttachmentResponse attachmentResponse(SentMessage message) {

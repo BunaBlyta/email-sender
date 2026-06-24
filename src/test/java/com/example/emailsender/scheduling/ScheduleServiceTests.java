@@ -149,6 +149,7 @@ class ScheduleServiceTests {
                 "Subject",
                 LocalDateTime.ofInstant(NOW, ZoneOffset.UTC),
                 true,
+                null,
                 null
         ));
 

@@ -135,10 +135,23 @@ public class GmailProvider implements MailProvider {
         try {
             return sendMimeMessage(
                     user,
-                    createMimeMessage(user, recipients, subject, body, null)
+                    createMimeMessage(user, recipients, subject, body, false, null)
             );
         } catch (Exception exception) {
             throw new MailProviderException("Failed to send Gmail message", exception);
+        }
+    }
+
+    @Override
+    public MailSendResult sendHtmlMessage(
+            User user, List<String> recipients, String subject, String htmlBody) {
+        try {
+            return sendMimeMessage(
+                    user,
+                    createMimeMessage(user, recipients, subject, htmlBody, true, null)
+            );
+        } catch (Exception exception) {
+            throw new MailProviderException("Failed to send tracked Gmail message", exception);
         }
     }
 
@@ -152,11 +165,29 @@ public class GmailProvider implements MailProvider {
         try {
             return sendMimeMessage(
                     user,
-                    createMimeMessage(user, recipients, subject, body, attachment)
+                    createMimeMessage(user, recipients, subject, body, false, attachment)
             );
         } catch (Exception exception) {
             throw new MailProviderException(
                     "Failed to send Gmail message with attachment", exception);
+        }
+    }
+
+    @Override
+    public MailSendResult sendHtmlMessageWithAttachment(
+            User user,
+            List<String> recipients,
+            String subject,
+            String htmlBody,
+            OutgoingAttachment attachment) {
+        try {
+            return sendMimeMessage(
+                    user,
+                    createMimeMessage(user, recipients, subject, htmlBody, true, attachment)
+            );
+        } catch (Exception exception) {
+            throw new MailProviderException(
+                    "Failed to send tracked Gmail message with attachment", exception);
         }
     }
 
@@ -165,6 +196,7 @@ public class GmailProvider implements MailProvider {
             List<String> recipients,
             String subject,
             String body,
+            boolean html,
             OutgoingAttachment attachment) throws Exception {
         MimeMessage message = new MimeMessage(Session.getInstance(new Properties()));
         message.setFrom(new InternetAddress(user.getEmail()));
@@ -177,12 +209,20 @@ public class GmailProvider implements MailProvider {
         message.setSubject(subject, StandardCharsets.UTF_8.name());
 
         if (attachment == null) {
-            message.setText(body, StandardCharsets.UTF_8.name());
+            if (html) {
+                message.setContent(body, "text/html; charset=UTF-8");
+            } else {
+                message.setText(body, StandardCharsets.UTF_8.name());
+            }
             return message;
         }
 
         MimeBodyPart bodyPart = new MimeBodyPart();
-        bodyPart.setText(body, StandardCharsets.UTF_8.name());
+        if (html) {
+            bodyPart.setContent(body, "text/html; charset=UTF-8");
+        } else {
+            bodyPart.setText(body, StandardCharsets.UTF_8.name());
+        }
 
         MimeBodyPart attachmentPart = new MimeBodyPart();
         attachmentPart.setDataHandler(new jakarta.activation.DataHandler(

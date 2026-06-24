@@ -28,11 +28,27 @@ public class OutlookProvider implements MailProvider {
     }
 
     @Override
+    public MailSendResult sendHtmlMessage(
+            User user, List<String> recipients, String subject, String htmlBody) {
+        throw unsupported();
+    }
+
+    @Override
     public MailSendResult sendMessageWithAttachment(
             User user,
             List<String> recipients,
             String subject,
             String body,
+            OutgoingAttachment attachment) {
+        throw unsupported();
+    }
+
+    @Override
+    public MailSendResult sendHtmlMessageWithAttachment(
+            User user,
+            List<String> recipients,
+            String subject,
+            String htmlBody,
             OutgoingAttachment attachment) {
         throw unsupported();
     }

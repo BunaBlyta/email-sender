@@ -11,6 +11,7 @@ public record SendResponse(
         String subject,
         LocalDateTime sentAt,
         boolean scheduled,
-        AttachmentResponse attachment
+        AttachmentResponse attachment,
+        TrackingResponse tracking
 ) {
 }

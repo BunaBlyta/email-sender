@@ -2,6 +2,7 @@ package com.example.emailsender.send;
 
 import com.example.emailsender.mail.provider.GmailProvider;
 import com.example.emailsender.mail.provider.MailSendResult;
+import com.example.emailsender.tracking.TrackingService;
 import com.example.emailsender.user.User;
 import com.example.emailsender.user.UserRepository;
 import com.example.emailsender.validation.ComposeValidator;
@@ -30,6 +31,7 @@ class SendServiceTests {
     private GmailProvider gmailProvider;
     private SentMessageRepository sentMessageRepository;
     private AttachmentValidator attachmentValidator;
+    private TrackingService trackingService;
     private SendService sendService;
 
     @BeforeEach
@@ -38,6 +40,7 @@ class SendServiceTests {
         gmailProvider = mock(GmailProvider.class);
         sentMessageRepository = mock(SentMessageRepository.class);
         attachmentValidator = new AttachmentValidator();
+        trackingService = mock(TrackingService.class);
         Clock clock = Clock.fixed(
                 Instant.parse("2026-06-22T13:00:00Z"),
                 ZoneOffset.UTC
@@ -48,7 +51,65 @@ class SendServiceTests {
                 new ComposeValidator(),
                 sentMessageRepository,
                 attachmentValidator,
+                trackingService,
                 clock
+        );
+    }
+
+    @Test
+    void sendsTrackedHtmlAndPersistsTrackingId() {
+        User user = new User();
+        user.setEmail("sender@example.com");
+        when(userRepository.findByEmail("sender@example.com"))
+                .thenReturn(Optional.of(user));
+        when(trackingService.createTrackedBody("Ready for review."))
+                .thenReturn(new TrackingService.TrackedBody(
+                        "tracking-123",
+                        "<div>Ready for review.</div><img src=\"pixel\"/>"
+                ));
+        when(gmailProvider.sendHtmlMessage(
+                user,
+                List.of("recipient@example.com"),
+                "Project update",
+                "<div>Ready for review.</div><img src=\"pixel\"/>"
+        )).thenReturn(new MailSendResult("message-tracked", "thread-tracked"));
+        when(sentMessageRepository.save(any(SentMessage.class)))
+                .thenAnswer(invocation -> {
+                    SentMessage message = invocation.getArgument(0);
+                    message.setId(12L);
+                    return message;
+                });
+        when(trackingService.toResponse(any(SentMessage.class)))
+                .thenAnswer(invocation -> {
+                    SentMessage message = invocation.getArgument(0);
+                    return new TrackingResponse(
+                            message.isTrackingEnabled(),
+                            "AWAITING_IMAGE_LOAD",
+                            message.getTrackingId(),
+                            0,
+                            null,
+                            null,
+                            List.of()
+                    );
+                });
+
+        SendResponse response = sendService.send(
+                "sender@example.com",
+                new SendRequest(
+                        List.of("recipient@example.com"),
+                        "Project update",
+                        "Ready for review.",
+                        true
+                )
+        );
+
+        assertEquals(true, response.tracking().enabled());
+        assertEquals("tracking-123", response.tracking().trackingId());
+        verify(gmailProvider).sendHtmlMessage(
+                user,
+                List.of("recipient@example.com"),
+                "Project update",
+                "<div>Ready for review.</div><img src=\"pixel\"/>"
         );
     }
 

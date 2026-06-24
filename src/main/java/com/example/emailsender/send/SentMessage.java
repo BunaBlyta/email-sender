@@ -28,6 +28,14 @@ public class SentMessage {
     private String attachmentFilename;
     private String attachmentMimeType;
     private Long attachmentSizeBytes;
+    private Boolean trackingEnabled = false;
+
+    @Column(unique = true)
+    private String trackingId;
+
+    private Integer pixelLoadCount = 0;
+    private LocalDateTime firstPixelLoadedAt;
+    private LocalDateTime lastPixelLoadedAt;
 
     public SentMessage() {}
 
@@ -74,4 +82,19 @@ public class SentMessage {
 
     public Long getAttachmentSizeBytes() { return attachmentSizeBytes; }
     public void setAttachmentSizeBytes(Long attachmentSizeBytes) { this.attachmentSizeBytes = attachmentSizeBytes; }
+
+    public boolean isTrackingEnabled() { return Boolean.TRUE.equals(trackingEnabled); }
+    public void setTrackingEnabled(boolean trackingEnabled) { this.trackingEnabled = trackingEnabled; }
+
+    public String getTrackingId() { return trackingId; }
+    public void setTrackingId(String trackingId) { this.trackingId = trackingId; }
+
+    public int getPixelLoadCount() { return pixelLoadCount == null ? 0 : pixelLoadCount; }
+    public void setPixelLoadCount(int pixelLoadCount) { this.pixelLoadCount = pixelLoadCount; }
+
+    public LocalDateTime getFirstPixelLoadedAt() { return firstPixelLoadedAt; }
+    public void setFirstPixelLoadedAt(LocalDateTime firstPixelLoadedAt) { this.firstPixelLoadedAt = firstPixelLoadedAt; }
+
+    public LocalDateTime getLastPixelLoadedAt() { return lastPixelLoadedAt; }
+    public void setLastPixelLoadedAt(LocalDateTime lastPixelLoadedAt) { this.lastPixelLoadedAt = lastPixelLoadedAt; }
 }

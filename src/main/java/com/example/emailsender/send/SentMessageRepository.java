@@ -1,7 +1,13 @@
 package com.example.emailsender.send;
 
+import com.example.emailsender.user.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.util.Optional;
+
 public interface SentMessageRepository extends JpaRepository<SentMessage, Long> {
-    // TODO: Find by recipient, by date range, by scheduled flag
+
+    Optional<SentMessage> findByTrackingId(String trackingId);
+
+    Optional<SentMessage> findByIdAndUser(Long id, User user);
 }

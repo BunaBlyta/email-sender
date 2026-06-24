@@ -14,10 +14,20 @@ public interface MailProvider {
 
     MailSendResult sendMessage(User user, List<String> recipients, String subject, String body);
 
+    MailSendResult sendHtmlMessage(
+            User user, List<String> recipients, String subject, String htmlBody);
+
     MailSendResult sendMessageWithAttachment(
             User user,
             List<String> recipients,
             String subject,
             String body,
+            OutgoingAttachment attachment);
+
+    MailSendResult sendHtmlMessageWithAttachment(
+            User user,
+            List<String> recipients,
+            String subject,
+            String htmlBody,
             OutgoingAttachment attachment);
 }
