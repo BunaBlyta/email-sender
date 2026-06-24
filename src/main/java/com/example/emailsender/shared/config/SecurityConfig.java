@@ -46,7 +46,8 @@ public class SecurityConfig {
                                 "/templates/**",
                                 "/scheduled/**",
                                 "/recipient-groups/**",
-                                "/tracking/**"
+                                "/tracking/**",
+                                "/security/**"
                         ).authenticated()
                         .requestMatchers("/track/**").permitAll()
                         .anyRequest().permitAll()
