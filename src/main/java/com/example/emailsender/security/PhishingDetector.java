@@ -48,9 +48,18 @@ public class PhishingDetector {
     }
 
     public PhishingAnalysisResponse analyze(PhishingAnalysisRequest request) {
+        return analyze(request, PhishingTrustContext.none());
+    }
+
+    public PhishingAnalysisResponse analyze(
+            PhishingAnalysisRequest request,
+            PhishingTrustContext trustContext) {
         if (request == null) {
             throw new IllegalArgumentException("Request body is required");
         }
+        PhishingTrustContext effectiveTrust = trustContext == null
+                ? PhishingTrustContext.none()
+                : trustContext;
 
         String sender = normalize(request.sender());
         String subject = normalize(request.subject());
@@ -68,7 +77,8 @@ public class PhishingDetector {
         int score = signals.values().stream()
                 .mapToInt(PhishingSignalResponse::scoreImpact)
                 .sum();
-        int cappedScore = Math.min(100, score);
+        int scoreAdjustment = trustScoreAdjustment(score, signals, effectiveTrust);
+        int cappedScore = Math.min(100, Math.max(0, score + scoreAdjustment));
 
         return new PhishingAnalysisResponse(
                 sender,
@@ -78,7 +88,12 @@ public class PhishingDetector {
                 List.copyOf(signals.values()),
                 inspectedLinks.stream()
                         .map(this::toLinkResponse)
-                        .toList()
+                        .toList(),
+                new PhishingTrustResponse(
+                        effectiveTrust.senderTrusted(),
+                        effectiveTrust.domainTrusted(),
+                        scoreAdjustment
+                )
         );
     }
 
@@ -232,6 +247,27 @@ public class PhishingDetector {
             return PhishingRiskLevel.MEDIUM;
         }
         return PhishingRiskLevel.LOW;
+    }
+
+    private int trustScoreAdjustment(
+            int score,
+            Map<String, PhishingSignalResponse> signals,
+            PhishingTrustContext trustContext) {
+        if (score <= 0 || !trustContext.hasTrust() || hasCriticalSignal(signals)) {
+            return 0;
+        }
+        if (trustContext.senderTrusted()) {
+            return -15;
+        }
+        return -10;
+    }
+
+    private boolean hasCriticalSignal(Map<String, PhishingSignalResponse> signals) {
+        return signals.containsKey("IP_ADDRESS_LINK")
+                || signals.containsKey("PUNYCODE_LINK")
+                || signals.containsKey("BRAND_IMPERSONATION_PATTERN")
+                || (signals.containsKey("CREDENTIAL_REQUEST")
+                        && signals.containsKey("NON_HTTPS_LINK"));
     }
 
     private String extractSenderDomain(String sender) {

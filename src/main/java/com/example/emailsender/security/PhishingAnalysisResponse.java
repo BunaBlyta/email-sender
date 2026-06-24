@@ -8,6 +8,7 @@ public record PhishingAnalysisResponse(
         PhishingRiskLevel riskLevel,
         int score,
         List<PhishingSignalResponse> signals,
-        List<LinkAnalysisResponse> links
+        List<LinkAnalysisResponse> links,
+        PhishingTrustResponse trust
 ) {
 }

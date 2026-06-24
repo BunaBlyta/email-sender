@@ -73,6 +73,45 @@ class PhishingDetectorTests {
         );
     }
 
+    @Test
+    void trustedSenderReducesNonCriticalRisk() {
+        PhishingAnalysisResponse response = phishingDetector.analyze(
+                new PhishingAnalysisRequest(
+                        "Support <support@example.com>",
+                        "Account update",
+                        "Please sign in at https://accounts.example-login.com/update"
+                ),
+                new PhishingTrustContext(true, false)
+        );
+
+        assertEquals(PhishingRiskLevel.LOW, response.riskLevel());
+        assertEquals(25, response.score());
+        assertTrue(response.trust().senderTrusted());
+        assertEquals(-15, response.trust().scoreAdjustment());
+    }
+
+    @Test
+    void trustedSenderDoesNotReduceCriticalCredentialLinkRisk() {
+        PhishingAnalysisResponse response = phishingDetector.analyze(
+                new PhishingAnalysisRequest(
+                        "Support <support@example.com>",
+                        "Account update",
+                        "Login at http://example.com/update"
+                ),
+                new PhishingTrustContext(true, false)
+        );
+
+        assertEquals(PhishingRiskLevel.MEDIUM, response.riskLevel());
+        assertEquals(35, response.score());
+        assertTrue(response.trust().senderTrusted());
+        assertEquals(0, response.trust().scoreAdjustment());
+        assertSignalCodes(
+                response,
+                "CREDENTIAL_REQUEST",
+                "NON_HTTPS_LINK"
+        );
+    }
+
     private void assertSignalCodes(
             PhishingAnalysisResponse response,
             String... expectedCodes) {
