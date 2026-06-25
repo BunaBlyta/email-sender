@@ -51,6 +51,7 @@ public class SecurityConfig {
                                 "/templates/**",
                                 "/scheduled/**",
                                 "/recipient-groups/**",
+                                "/drafts/**",
                                 "/tracking/**",
                                 "/security/**",
                                 "/screener/**",

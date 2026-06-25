@@ -11,21 +11,27 @@ public class Draft {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @ManyToOne(optional = false)
+    @JoinColumn(name = "user_id", nullable = false)
+    private User user;
+
     private String recipient;
     private String subject;
 
-    @Column(length = 5000)
+    @Lob
     private String body;
 
     private LocalDateTime scheduledTime;
-
-    @ManyToOne
-    private User user;
+    private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
 
     public Draft() {}
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
+
+    public User getUser() { return user; }
+    public void setUser(User user) { this.user = user; }
 
     public String getRecipient() { return recipient; }
     public void setRecipient(String recipient) { this.recipient = recipient; }
@@ -39,6 +45,9 @@ public class Draft {
     public LocalDateTime getScheduledTime() { return scheduledTime; }
     public void setScheduledTime(LocalDateTime scheduledTime) { this.scheduledTime = scheduledTime; }
 
-    public User getUser() { return user; }
-    public void setUser(User user) { this.user = user; }
+    public LocalDateTime getCreatedAt() { return createdAt; }
+    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+
+    public LocalDateTime getUpdatedAt() { return updatedAt; }
+    public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
 }

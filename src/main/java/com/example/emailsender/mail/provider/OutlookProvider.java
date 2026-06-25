@@ -17,6 +17,11 @@ public class OutlookProvider implements MailProvider {
     }
 
     @Override
+    public List<MailThread> searchThreads(User user, String query, int maxResults) {
+        throw unsupported();
+    }
+
+    @Override
     public List<Message> fetchMessages(User user, String threadId) {
         throw unsupported();
     }

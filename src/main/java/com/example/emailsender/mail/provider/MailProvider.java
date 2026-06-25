@@ -10,6 +10,8 @@ public interface MailProvider {
 
     List<MailThread> fetchThreads(User user, int maxResults);
 
+    List<MailThread> searchThreads(User user, String query, int maxResults);
+
     List<Message> fetchMessages(User user, String threadId);
 
     FetchedThread fetchThread(User user, String threadId);

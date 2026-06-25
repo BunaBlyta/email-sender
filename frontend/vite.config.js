@@ -12,6 +12,7 @@ export default defineConfig({
       "/templates": backend,
       "/scheduled": backend,
       "/recipient-groups": backend,
+      "/drafts": backend,
       "/security": backend,
       "/screener": backend,
       "/account": backend,

@@ -50,17 +50,28 @@ public class GmailProvider implements MailProvider {
 
     @Override
     public List<MailThread> fetchThreads(User user, int maxResults) {
-        try {
-            String accessToken = tokenStore.getValidAccessToken(user);
-            Gmail gmail = new Gmail.Builder(
-                    GoogleNetHttpTransport.newTrustedTransport(),
-                    GsonFactory.getDefaultInstance(),
-                    request -> request.getHeaders().setAuthorization("Bearer " + accessToken)
-            ).setApplicationName("email-platform").build();
+        return listThreads(user, null, maxResults, "Failed to fetch threads");
+    }
 
-            ListThreadsResponse response = gmail.users().threads().list("me")
-                    .setMaxResults((long) maxResults)
-                    .execute();
+    @Override
+    public List<MailThread> searchThreads(User user, String query, int maxResults) {
+        return listThreads(user, query, maxResults, "Failed to search threads");
+    }
+
+    private List<MailThread> listThreads(
+            User user,
+            String query,
+            int maxResults,
+            String failureMessage) {
+        try {
+            Gmail gmail = buildGmailClient(user);
+
+            var listRequest = gmail.users().threads().list("me")
+                    .setMaxResults((long) maxResults);
+            if (query != null && !query.isBlank()) {
+                listRequest.setQ(query);
+            }
+            ListThreadsResponse response = listRequest.execute();
 
             List<Thread> threads = response.getThreads();
             if (threads == null) {
@@ -95,7 +106,7 @@ public class GmailProvider implements MailProvider {
             }
             return result;
         } catch (IOException | GeneralSecurityException e) {
-            throw new RuntimeException("Failed to fetch threads", e);
+            throw new RuntimeException(failureMessage, e);
         }
     }
 
