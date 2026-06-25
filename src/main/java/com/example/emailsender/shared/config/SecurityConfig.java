@@ -1,6 +1,7 @@
 package com.example.emailsender.shared.config;
 
 import com.example.emailsender.auth.OAuthService;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -27,13 +28,17 @@ public class SecurityConfig {
     private final ClientRegistrationRepository clientRegistrationRepository;
     private final OAuth2AuthorizedClientService authorizedClientService;
     private final OAuthService oauthService;
+    private final String loginSuccessRedirectUrl;
 
     public SecurityConfig(ClientRegistrationRepository clientRegistrationRepository,
                           OAuth2AuthorizedClientService authorizedClientService,
-                          OAuthService oauthService) {
+                          OAuthService oauthService,
+                          @Value("${app.login-success-redirect-url}")
+                          String loginSuccessRedirectUrl) {
         this.clientRegistrationRepository = clientRegistrationRepository;
         this.authorizedClientService = authorizedClientService;
         this.oauthService = oauthService;
+        this.loginSuccessRedirectUrl = loginSuccessRedirectUrl;
     }
 
     @Bean
@@ -48,7 +53,8 @@ public class SecurityConfig {
                                 "/recipient-groups/**",
                                 "/tracking/**",
                                 "/security/**",
-                                "/screener/**"
+                                "/screener/**",
+                                "/account/**"
                         ).authenticated()
                         .requestMatchers("/track/**").permitAll()
                         .anyRequest().permitAll()
@@ -66,7 +72,7 @@ public class SecurityConfig {
                             );
 
                             oauthService.handleOAuthSuccess(principal, authorizedClient);
-                            response.sendRedirect("/inbox/threads");
+                            response.sendRedirect(loginSuccessRedirectUrl);
                         })
                         .authorizationEndpoint(authorization -> authorization
                                 .authorizationRequestResolver(noPkceResolver())

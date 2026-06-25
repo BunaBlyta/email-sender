@@ -10,6 +10,7 @@ import com.google.api.client.json.gson.GsonFactory;
 import com.google.api.services.gmail.Gmail;
 import com.google.api.services.gmail.model.MessagePartHeader;
 import com.google.api.services.gmail.model.ListThreadsResponse;
+import com.google.api.services.gmail.model.MessagePart;
 import com.google.api.services.gmail.model.Thread;
 import jakarta.mail.internet.MimeUtility;
 import jakarta.mail.Session;
@@ -35,6 +36,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.Base64;
 import java.util.Properties;
+import java.util.regex.Pattern;
 
 @Service
 public class GmailProvider implements MailProvider {
@@ -98,35 +100,76 @@ public class GmailProvider implements MailProvider {
 
     @Override
     public List<Message> fetchMessages(User user, String threadId) {
-        try {
-            String accessToken = tokenStore.getValidAccessToken(user);
-            Gmail gmail = new Gmail.Builder(
-                    GoogleNetHttpTransport.newTrustedTransport(),
-                    GsonFactory.getDefaultInstance(),
-                    request -> request.getHeaders().setAuthorization("Bearer " + accessToken)
-            ).setApplicationName("email-platform").build();
+        return fetchThread(user, threadId).messages().stream()
+                .map(this::toMessage)
+                .toList();
+    }
 
-            Thread thread = gmail.users().threads().get("me", threadId).execute();
+    @Override
+    public FetchedThread fetchThread(User user, String threadId) {
+        try {
+            Thread thread = buildGmailClient(user).users().threads()
+                    .get("me", threadId)
+                    .setFormat("full")
+                    .execute();
 
             List<com.google.api.services.gmail.model.Message> gmailMessages = thread.getMessages();
-            if (gmailMessages == null) {
-                return Collections.emptyList();
+            if (gmailMessages == null || gmailMessages.isEmpty()) {
+                return new FetchedThread(threadId, "", List.of(), null, false, List.of());
             }
 
-            List<Message> result = new ArrayList<>();
+            List<FetchedMessage> messages = new ArrayList<>();
             for (com.google.api.services.gmail.model.Message gmailMessage : gmailMessages) {
-                Message msg = new Message();
-                msg.setExternalMessageId(gmailMessage.getId());
-                msg.setSentAt(LocalDateTime.now());
-                msg.setDirection(Message.Direction.INBOUND);
-                msg.setStatus(Message.Status.SENT);
-                msg.setRead(false);
-                result.add(msg);
+                messages.add(toFetchedMessage(user, gmailMessage));
             }
-            return result;
+            com.google.api.services.gmail.model.Message latestMessage =
+                    gmailMessages.get(gmailMessages.size() - 1);
+            return new FetchedThread(
+                    thread.getId(),
+                    getHeader(latestMessage, "Subject"),
+                    getParticipants(gmailMessages),
+                    toLocalDateTime(latestMessage.getInternalDate()),
+                    gmailMessages.stream()
+                            .anyMatch(message -> message.getLabelIds() != null
+                                    && message.getLabelIds().contains("UNREAD")),
+                    List.copyOf(messages)
+            );
         } catch (IOException | GeneralSecurityException e) {
-            throw new RuntimeException("Failed to fetch messages", e);
+            throw new RuntimeException("Failed to fetch thread", e);
         }
+    }
+
+    private Message toMessage(FetchedMessage fetchedMessage) {
+        Message message = new Message();
+        message.setExternalMessageId(fetchedMessage.externalMessageId());
+        message.setSender(fetchedMessage.sender());
+        message.setRecipients(fetchedMessage.recipients());
+        message.setBody(fetchedMessage.body());
+        message.setSentAt(fetchedMessage.sentAt());
+        message.setDirection(fetchedMessage.direction());
+        message.setStatus(Message.Status.SENT);
+        message.setRead(fetchedMessage.read());
+        return message;
+    }
+
+    private FetchedMessage toFetchedMessage(
+            User user,
+            com.google.api.services.gmail.model.Message gmailMessage) {
+        String sender = getHeader(gmailMessage, "From");
+        List<String> recipients = recipients(gmailMessage);
+        boolean read = gmailMessage.getLabelIds() == null
+                || !gmailMessage.getLabelIds().contains("UNREAD");
+        return new FetchedMessage(
+                gmailMessage.getId(),
+                sender,
+                recipients,
+                extractBody(gmailMessage.getPayload()),
+                gmailMessage.getSnippet() == null ? "" : gmailMessage.getSnippet(),
+                toLocalDateTime(gmailMessage.getInternalDate()),
+                direction(sender, user.getEmail()),
+                read,
+                extractAttachments(gmailMessage.getPayload())
+        );
     }
 
     @Override
@@ -332,6 +375,134 @@ public class GmailProvider implements MailProvider {
                 .map(String::trim)
                 .filter(value -> !value.isBlank())
                 .forEach(participants::add);
+    }
+
+    private List<String> recipients(com.google.api.services.gmail.model.Message message) {
+        Set<String> recipients = new LinkedHashSet<>();
+        addHeaderValues(recipients, getHeader(message, "To"));
+        addHeaderValues(recipients, getHeader(message, "Cc"));
+        addHeaderValues(recipients, getHeader(message, "Bcc"));
+        return List.copyOf(recipients);
+    }
+
+    String extractBody(MessagePart payload) {
+        if (payload == null) {
+            return "";
+        }
+        String plainText = findBody(payload, "text/plain");
+        if (!plainText.isBlank()) {
+            return plainText;
+        }
+        String html = findBody(payload, "text/html");
+        if (!html.isBlank()) {
+            return htmlToText(html);
+        }
+        return "";
+    }
+
+    private String findBody(MessagePart part, String mimeType) {
+        if (part == null) {
+            return "";
+        }
+        if (mimeType.equalsIgnoreCase(part.getMimeType())
+                && part.getBody() != null
+                && part.getBody().getData() != null) {
+            return decodeBase64Url(part.getBody().getData());
+        }
+        if (part.getParts() == null) {
+            return "";
+        }
+        for (MessagePart child : part.getParts()) {
+            String body = findBody(child, mimeType);
+            if (!body.isBlank()) {
+                return body;
+            }
+        }
+        return "";
+    }
+
+    List<FetchedAttachment> extractAttachments(MessagePart payload) {
+        if (payload == null) {
+            return List.of();
+        }
+        List<FetchedAttachment> attachments = new ArrayList<>();
+        collectAttachments(payload, attachments);
+        return List.copyOf(attachments);
+    }
+
+    private void collectAttachments(
+            MessagePart part,
+            List<FetchedAttachment> attachments) {
+        if (part == null) {
+            return;
+        }
+        if (part.getFilename() != null && !part.getFilename().isBlank()) {
+            Long size = part.getBody() == null || part.getBody().getSize() == null
+                    ? null
+                    : part.getBody().getSize().longValue();
+            attachments.add(new FetchedAttachment(
+                    decodeHeader(part.getFilename()),
+                    part.getMimeType(),
+                    size
+            ));
+        }
+        if (part.getParts() == null) {
+            return;
+        }
+        for (MessagePart child : part.getParts()) {
+            collectAttachments(child, attachments);
+        }
+    }
+
+    private Message.Direction direction(String sender, String userEmail) {
+        if (userEmail == null || userEmail.isBlank()) {
+            return Message.Direction.INBOUND;
+        }
+        return extractEmailAddresses(sender).stream()
+                .anyMatch(address -> address.equalsIgnoreCase(userEmail))
+                ? Message.Direction.OUTBOUND
+                : Message.Direction.INBOUND;
+    }
+
+    private List<String> extractEmailAddresses(String value) {
+        if (value == null || value.isBlank()) {
+            return List.of();
+        }
+        try {
+            return Arrays.stream(InternetAddress.parse(value, false))
+                    .map(InternetAddress::getAddress)
+                    .filter(address -> address != null && !address.isBlank())
+                    .map(address -> address.toLowerCase(java.util.Locale.ROOT))
+                    .toList();
+        } catch (Exception exception) {
+            return List.of();
+        }
+    }
+
+    private String decodeBase64Url(String value) {
+        String padded = value;
+        int remainder = padded.length() % 4;
+        if (remainder > 0) {
+            padded = padded + "=".repeat(4 - remainder);
+        }
+        return new String(Base64.getUrlDecoder().decode(padded), StandardCharsets.UTF_8);
+    }
+
+    private String htmlToText(String html) {
+        String withBreaks = html
+                .replaceAll("(?i)<\\s*br\\s*/?>", "\n")
+                .replaceAll("(?i)</\\s*p\\s*>", "\n");
+        String withoutTags = Pattern.compile("<[^>]+>").matcher(withBreaks).replaceAll(" ");
+        return withoutTags
+                .replace("&nbsp;", " ")
+                .replace("&amp;", "&")
+                .replace("&lt;", "<")
+                .replace("&gt;", ">")
+                .replace("&quot;", "\"")
+                .replace("&#39;", "'")
+                .replaceAll("[ \\t\\x0B\\f\\r]+", " ")
+                .replaceAll("\\n\\s+", "\n")
+                .trim();
     }
 
     private LocalDateTime toLocalDateTime(Long epochMillis) {

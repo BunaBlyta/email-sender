@@ -1,6 +1,9 @@
 package com.example.emailsender.inbox;
 
 import com.example.emailsender.mail.model.MailThread;
+import com.example.emailsender.mail.provider.FetchedAttachment;
+import com.example.emailsender.mail.provider.FetchedMessage;
+import com.example.emailsender.mail.provider.FetchedThread;
 import com.example.emailsender.mail.provider.GmailProvider;
 import com.example.emailsender.user.User;
 import com.example.emailsender.user.UserRepository;
@@ -44,5 +47,56 @@ public class InboxService {
                         thread.isHasUnread()
                 ))
                 .toList();
+    }
+
+    public InboxThreadDetailResponse getThreadForUser(String email, String threadId) {
+        if (email == null || email.isBlank()) {
+            throw new IllegalArgumentException("Authenticated user has no email address");
+        }
+        if (threadId == null || threadId.isBlank()) {
+            throw new IllegalArgumentException("Thread id is required");
+        }
+
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found: " + email));
+
+        return toDetailResponse(gmailProvider.fetchThread(user, threadId));
+    }
+
+    private InboxThreadDetailResponse toDetailResponse(FetchedThread thread) {
+        return new InboxThreadDetailResponse(
+                thread.externalThreadId(),
+                thread.subject(),
+                thread.participants(),
+                thread.lastMessageAt(),
+                thread.hasUnread(),
+                thread.messages().stream()
+                        .map(this::toMessageResponse)
+                        .toList()
+        );
+    }
+
+    private InboxMessageResponse toMessageResponse(FetchedMessage message) {
+        return new InboxMessageResponse(
+                message.externalMessageId(),
+                message.sender(),
+                message.recipients(),
+                message.body(),
+                message.snippet(),
+                message.sentAt(),
+                message.direction(),
+                message.read(),
+                message.attachments().stream()
+                        .map(this::toAttachmentResponse)
+                        .toList()
+        );
+    }
+
+    private InboxAttachmentResponse toAttachmentResponse(FetchedAttachment attachment) {
+        return new InboxAttachmentResponse(
+                attachment.filename(),
+                attachment.mimeType(),
+                attachment.sizeBytes()
+        );
     }
 }

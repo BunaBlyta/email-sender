@@ -12,6 +12,8 @@ public interface MailProvider {
 
     List<Message> fetchMessages(User user, String threadId);
 
+    FetchedThread fetchThread(User user, String threadId);
+
     MailSendResult sendMessage(User user, List<String> recipients, String subject, String body);
 
     MailSendResult sendHtmlMessage(

@@ -1,6 +1,10 @@
 package com.example.emailsender.inbox;
 
 import com.example.emailsender.mail.model.MailThread;
+import com.example.emailsender.mail.model.Message;
+import com.example.emailsender.mail.provider.FetchedAttachment;
+import com.example.emailsender.mail.provider.FetchedMessage;
+import com.example.emailsender.mail.provider.FetchedThread;
 import com.example.emailsender.mail.provider.GmailProvider;
 import com.example.emailsender.user.User;
 import com.example.emailsender.user.UserRepository;
@@ -59,6 +63,50 @@ class InboxServiceTests {
     }
 
     @Test
+    void returnsThreadDetailWithMessagesAndAttachments() {
+        User user = new User();
+        user.setEmail("user@example.com");
+        LocalDateTime sentAt = LocalDateTime.of(2026, 6, 25, 12, 30);
+        FetchedThread thread = new FetchedThread(
+                "thread-123",
+                "Project update",
+                List.of("sender@example.com", "user@example.com"),
+                sentAt,
+                false,
+                List.of(new FetchedMessage(
+                        "message-123",
+                        "Sender <sender@example.com>",
+                        List.of("user@example.com"),
+                        "Ready for review.",
+                        "Ready for review.",
+                        sentAt,
+                        Message.Direction.INBOUND,
+                        true,
+                        List.of(new FetchedAttachment(
+                                "report.pdf",
+                                "application/pdf",
+                                1200L
+                        ))
+                ))
+        );
+
+        when(userRepository.findByEmail("user@example.com")).thenReturn(Optional.of(user));
+        when(gmailProvider.fetchThread(user, "thread-123")).thenReturn(thread);
+
+        InboxThreadDetailResponse response =
+                inboxService.getThreadForUser("user@example.com", "thread-123");
+
+        assertEquals("thread-123", response.externalThreadId());
+        assertEquals("Project update", response.subject());
+        assertEquals(1, response.messages().size());
+        assertEquals("message-123", response.messages().getFirst().externalMessageId());
+        assertEquals(Message.Direction.INBOUND, response.messages().getFirst().direction());
+        assertEquals("report.pdf",
+                response.messages().getFirst().attachments().getFirst().filename());
+        verify(gmailProvider).fetchThread(user, "thread-123");
+    }
+
+    @Test
     void rejectsMaxResultsOutsideSupportedRange() {
         IllegalArgumentException exception = assertThrows(
                 IllegalArgumentException.class,
@@ -74,6 +122,16 @@ class InboxServiceTests {
         assertThrows(
                 IllegalArgumentException.class,
                 () -> inboxService.getThreadsForUser(null, 20)
+        );
+
+        verifyNoInteractions(userRepository, gmailProvider);
+    }
+
+    @Test
+    void rejectsMissingThreadId() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> inboxService.getThreadForUser("user@example.com", " ")
         );
 
         verifyNoInteractions(userRepository, gmailProvider);

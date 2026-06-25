@@ -22,6 +22,11 @@ public class OutlookProvider implements MailProvider {
     }
 
     @Override
+    public FetchedThread fetchThread(User user, String threadId) {
+        throw unsupported();
+    }
+
+    @Override
     public MailSendResult sendMessage(
             User user, List<String> recipients, String subject, String body) {
         throw unsupported();
