@@ -14,6 +14,12 @@ public interface MailProvider {
 
     FetchedThread fetchThread(User user, String threadId);
 
+    void markThreadRead(User user, String threadId);
+
+    void markThreadUnread(User user, String threadId);
+
+    void archiveThread(User user, String threadId);
+
     MailSendResult sendMessage(User user, List<String> recipients, String subject, String body);
 
     MailSendResult sendHtmlMessage(

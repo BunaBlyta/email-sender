@@ -11,6 +11,7 @@ import com.google.api.services.gmail.Gmail;
 import com.google.api.services.gmail.model.MessagePartHeader;
 import com.google.api.services.gmail.model.ListThreadsResponse;
 import com.google.api.services.gmail.model.MessagePart;
+import com.google.api.services.gmail.model.ModifyThreadRequest;
 import com.google.api.services.gmail.model.Thread;
 import jakarta.mail.internet.MimeUtility;
 import jakarta.mail.Session;
@@ -137,6 +138,39 @@ public class GmailProvider implements MailProvider {
         } catch (IOException | GeneralSecurityException e) {
             throw new RuntimeException("Failed to fetch thread", e);
         }
+    }
+
+    @Override
+    public void markThreadRead(User user, String threadId) {
+        modifyThreadLabels(
+                user,
+                threadId,
+                List.of(),
+                List.of("UNREAD"),
+                "Failed to mark Gmail thread as read"
+        );
+    }
+
+    @Override
+    public void markThreadUnread(User user, String threadId) {
+        modifyThreadLabels(
+                user,
+                threadId,
+                List.of("UNREAD"),
+                List.of(),
+                "Failed to mark Gmail thread as unread"
+        );
+    }
+
+    @Override
+    public void archiveThread(User user, String threadId) {
+        modifyThreadLabels(
+                user,
+                threadId,
+                List.of(),
+                List.of("INBOX"),
+                "Failed to archive Gmail thread"
+        );
     }
 
     private Message toMessage(FetchedMessage fetchedMessage) {
@@ -300,6 +334,24 @@ public class GmailProvider implements MailProvider {
                         .send("me", gmailMessage)
                         .execute();
         return new MailSendResult(sentMessage.getId(), sentMessage.getThreadId());
+    }
+
+    private void modifyThreadLabels(
+            User user,
+            String threadId,
+            List<String> labelsToAdd,
+            List<String> labelsToRemove,
+            String failureMessage) {
+        try {
+            ModifyThreadRequest request = new ModifyThreadRequest()
+                    .setAddLabelIds(labelsToAdd)
+                    .setRemoveLabelIds(labelsToRemove);
+            buildGmailClient(user).users().threads()
+                    .modify("me", threadId, request)
+                    .execute();
+        } catch (IOException | GeneralSecurityException exception) {
+            throw new MailProviderException(failureMessage, exception);
+        }
     }
 
     private Gmail buildGmailClient(User user)
