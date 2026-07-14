@@ -18,7 +18,7 @@ public class Draft {
     private String recipient;
     private String subject;
 
-    @Lob
+    @Column(length = 100_000)
     private String body;
 
     private LocalDateTime scheduledTime;
