@@ -1,29 +1,31 @@
-package com.example.emailsender.inbox.triage;
+package com.example.emailsender.inbox.context;
 
 import com.example.emailsender.mail.model.MailThread;
 import com.example.emailsender.security.PhishingRiskLevel;
+import com.example.emailsender.security.PhishingSignalResponse;
 
 import java.time.LocalDateTime;
 import java.util.List;
 
-public record TriageThreadResponse(
-        String externalThreadId,
+public record ThreadContextResponse(
+        String threadId,
         String subject,
         List<String> participants,
         LocalDateTime lastMessageAt,
         boolean hasUnread,
-        TriageLabel label,
-        int attentionScore,
-        String suggestedAction,
-        List<String> reasons,
         MailThread.Category category,
         boolean categoryOverride,
         MailThread.Category suggestedCategory,
         MailThread.WorkflowState workflowState,
         MailThread.ScreenerStatus screenerStatus,
+        String sender,
+        String senderEmail,
+        String senderDomain,
         boolean senderTrusted,
         boolean domainTrusted,
         PhishingRiskLevel phishingRiskLevel,
-        int phishingScore
+        int phishingScore,
+        List<PhishingSignalResponse> phishingSignals,
+        List<String> reasons
 ) {
 }

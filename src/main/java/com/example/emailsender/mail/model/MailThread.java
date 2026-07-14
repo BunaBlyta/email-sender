@@ -21,10 +21,14 @@ public class MailThread {
     @ManyToOne
     private User user;
 
+    @Column(length = 128)
     private String externalThreadId;
+
+    @Column(length = 1000)
     private String subject;
 
     @ElementCollection
+    @Column(length = 1000)
     private List<String> participants;
 
     private LocalDateTime lastMessageAt;
