@@ -84,6 +84,7 @@ function App() {
   const [phishingResult, setPhishingResult] = useState(null);
   const [lastSend, setLastSend] = useState(null);
   const [bulkResult, setBulkResult] = useState(null);
+  const [trackedMessages, setTrackedMessages] = useState([]);
   const [trackingMessageId, setTrackingMessageId] = useState("");
   const [trackingResult, setTrackingResult] = useState(null);
   const [notice, setNotice] = useState("");
@@ -183,6 +184,7 @@ function App() {
       refreshDrafts(),
       refreshRecipientGroups(),
       refreshScheduledMessages(),
+      refreshTrackedMessages(),
       refreshTrust(),
       refreshPending()
     ];
@@ -348,6 +350,10 @@ function App() {
 
   async function refreshScheduledMessages() {
     setScheduledMessages(await api("/scheduled"));
+  }
+
+  async function refreshTrackedMessages() {
+    setTrackedMessages(await api("/tracking/sent"));
   }
 
   async function refreshPending() {
@@ -603,11 +609,13 @@ function App() {
     });
   }
 
-  async function lookupTracking(event) {
-    event.preventDefault();
+  async function openTrackingSignals(sentMessageId) {
     await run(async () => {
-      const response = await api(`/tracking/sent/${trackingMessageId}`);
+      const response = await api(`/tracking/sent/${sentMessageId}`);
+      setTrackingMessageId(String(sentMessageId));
       setTrackingResult(response);
+      await refreshTrackedMessages();
+      setActiveView("tracking");
       setNotice("Open signals loaded.");
     });
   }
@@ -784,6 +792,7 @@ function App() {
             onLoadDraft={loadDraft}
             onDeleteDraft={deleteDraft}
             onApplyTemplate={applyTemplate}
+            onViewOpenSignals={openTrackingSignals}
           />
         )}
 
@@ -833,11 +842,11 @@ function App() {
               "Sender rejected.",
               "Reject this sender?"
             )}
+            trackedMessages={trackedMessages}
             trackingMessageId={trackingMessageId}
-            setTrackingMessageId={setTrackingMessageId}
             trackingResult={trackingResult}
-            lastSend={lastSend}
-            onLookupTracking={lookupTracking}
+            onSelectTracking={openTrackingSignals}
+            onRefreshTracking={() => run(refreshTrackedMessages)}
             phishingForm={phishingForm}
             setPhishingForm={setPhishingForm}
             phishingResult={phishingResult}
@@ -886,11 +895,11 @@ function App() {
 
         {activeView === "tracking" && (
           <TrackingView
-            messageId={trackingMessageId}
-            setMessageId={setTrackingMessageId}
+            messages={trackedMessages}
+            selectedMessageId={trackingMessageId}
             result={trackingResult}
-            lastSend={lastSend}
-            onLookup={lookupTracking}
+            onSelect={openTrackingSignals}
+            onRefresh={() => run(refreshTrackedMessages)}
           />
         )}
 
@@ -1528,7 +1537,8 @@ function ComposeView({
   onSaveDraft,
   onLoadDraft,
   onDeleteDraft,
-  onApplyTemplate
+  onApplyTemplate,
+  onViewOpenSignals
 }) {
   return (
     <div className="compose-workspace">
@@ -1579,6 +1589,7 @@ function ComposeView({
           scheduleAt={scheduleAt}
           setScheduleAt={setScheduleAt}
           lastSend={lastSend}
+          onViewOpenSignals={onViewOpenSignals}
         />
         <TemplatePicker templates={templates} onApplyTemplate={onApplyTemplate} />
         <DraftShelf
@@ -1619,7 +1630,8 @@ function DeliveryPanel({
   setFile,
   scheduleAt,
   setScheduleAt,
-  lastSend
+  lastSend,
+  onViewOpenSignals
 }) {
   return (
     <section className="support-panel">
@@ -1651,9 +1663,13 @@ function DeliveryPanel({
           <div className="result-box">
             <strong>{lastSend.scheduled ? "Scheduled" : "Last sent"}</strong>
             <span>{lastSend.subject}</span>
-            {lastSend.id && <span>Message ID: {lastSend.id}</span>}
-            {lastSend.tracking?.enabled && (
-              <span>Open signals: {trackingStatusLabel(lastSend.tracking.status)}</span>
+            {lastSend.id && lastSend.tracking?.enabled && (
+              <>
+                <span>Open signals: {trackingStatusLabel(lastSend.tracking.status)}</span>
+                <button type="button" onClick={() => onViewOpenSignals(lastSend.id)}>
+                  View open signals
+                </button>
+              </>
             )}
           </div>
         )}
@@ -1784,11 +1800,11 @@ function ManageView({
   onApproveSender,
   onApproveDomain,
   onRejectSender,
+  trackedMessages,
   trackingMessageId,
-  setTrackingMessageId,
   trackingResult,
-  lastSend,
-  onLookupTracking,
+  onSelectTracking,
+  onRefreshTracking,
   phishingForm,
   setPhishingForm,
   phishingResult,
@@ -1884,11 +1900,11 @@ function ManageView({
         {activeTab === "signals" && (
           <div className="signals-grid">
             <TrackingView
-              messageId={trackingMessageId}
-              setMessageId={setTrackingMessageId}
+              messages={trackedMessages}
+              selectedMessageId={trackingMessageId}
               result={trackingResult}
-              lastSend={lastSend}
-              onLookup={onLookupTracking}
+              onSelect={onSelectTracking}
+              onRefresh={onRefreshTracking}
             />
             <SecurityView
               form={phishingForm}
@@ -2159,23 +2175,39 @@ function ScheduledView({ messages, onRefresh, onCancel }) {
   );
 }
 
-function TrackingView({ messageId, setMessageId, result, lastSend, onLookup }) {
+function TrackingView({ messages, selectedMessageId, result, onSelect, onRefresh }) {
   return (
     <div className="content-grid">
       <section className="panel">
         <div className="panel-heading">
           <div>
             <h2>Open Signals</h2>
-            <p className="subtle">Image-load signal lookup.</p>
+            <p className="subtle">Recent tracked messages and their image-load signals.</p>
           </div>
+          <button className="secondary" type="button" onClick={onRefresh}>Refresh</button>
         </div>
-        <form className="stack" onSubmit={onLookup}>
-          <Field label="Sent Message ID">
-            <input value={messageId} onChange={(event) => setMessageId(event.target.value)} />
-          </Field>
-          {lastSend?.id && <p className="subtle">Last sent ID: {lastSend.id}</p>}
-          <button className="primary" type="submit">Load open signals</button>
-        </form>
+        {messages.length > 0 ? (
+          <div className="asset-list">
+            {messages.map((message) => (
+              <button
+                className={`asset-row tracking-message-row ${
+                  String(message.sentMessageId) === String(selectedMessageId) ? "active" : ""
+                }`}
+                type="button"
+                key={message.sentMessageId}
+                onClick={() => onSelect(message.sentMessageId)}
+              >
+                <strong>{message.subject || "(No subject)"}</strong>
+                <span>{message.recipient || "No recipient"}</span>
+                <span>
+                  {trackingStatusLabel(message.status)} · {message.pixelLoadCount} {message.pixelLoadCount === 1 ? "signal" : "signals"} · {formatDate(message.sentAt)}
+                </span>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <EmptyState label="No tracked messages yet." />
+        )}
       </section>
       <section className="panel">
         <div className="panel-heading">

@@ -12,6 +12,8 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
+
 @RestController
 public class ReadReceiptController {
 
@@ -54,6 +56,12 @@ public class ReadReceiptController {
                 principal.getAttribute("email"),
                 sentMessageId
         );
+    }
+
+    @GetMapping("/tracking/sent")
+    public List<TrackedMessageSummaryResponse> recent(
+            @AuthenticationPrincipal OAuth2User principal) {
+        return trackingService.listRecent(principal.getAttribute("email"));
     }
 
     private String imageFormat(HttpServletRequest request) {

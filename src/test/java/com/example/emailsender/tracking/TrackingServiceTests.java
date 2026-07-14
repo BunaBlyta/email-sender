@@ -2,6 +2,7 @@ package com.example.emailsender.tracking;
 
 import com.example.emailsender.send.SentMessage;
 import com.example.emailsender.send.SentMessageRepository;
+import com.example.emailsender.user.User;
 import com.example.emailsender.user.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -27,16 +28,18 @@ class TrackingServiceTests {
 
     private SentMessageRepository sentMessageRepository;
     private TrackingEventRepository trackingEventRepository;
+    private UserRepository userRepository;
     private TrackingService trackingService;
 
     @BeforeEach
     void setUp() {
         sentMessageRepository = mock(SentMessageRepository.class);
         trackingEventRepository = mock(TrackingEventRepository.class);
+        userRepository = mock(UserRepository.class);
         trackingService = new TrackingService(
                 sentMessageRepository,
                 trackingEventRepository,
-                mock(UserRepository.class),
+                userRepository,
                 Clock.fixed(
                         Instant.parse("2026-06-22T16:00:00Z"),
                         ZoneOffset.UTC
@@ -120,6 +123,44 @@ class TrackingServiceTests {
         assertEquals(5L, response.recentEvents().getFirst().id());
         assertEquals("BROWSER", response.recentEvents().getFirst().source());
         assertEquals("gif", response.recentEvents().getFirst().imageFormat());
+    }
+
+    @Test
+    void listsRecentTrackedMessagesForAuthenticatedUser() {
+        User user = new User();
+        user.setEmail("user@example.com");
+        SentMessage detected = mock(SentMessage.class);
+        when(detected.getId()).thenReturn(42L);
+        when(detected.getRecipient()).thenReturn("recipient@example.com");
+        when(detected.getSubject()).thenReturn("Thesis update");
+        when(detected.getSentAt()).thenReturn(
+                LocalDateTime.of(2026, 6, 22, 15, 30));
+        when(detected.isTrackingEnabled()).thenReturn(true);
+        when(detected.getPixelLoadCount()).thenReturn(2);
+        when(detected.getFirstPixelLoadedAt()).thenReturn(
+                LocalDateTime.of(2026, 6, 22, 15, 45));
+        when(detected.getLastPixelLoadedAt()).thenReturn(
+                LocalDateTime.of(2026, 6, 22, 16, 0));
+        when(userRepository.findByEmail("user@example.com"))
+                .thenReturn(Optional.of(user));
+        when(sentMessageRepository
+                .findTop50ByUserAndTrackingEnabledTrueOrderBySentAtDesc(user))
+                .thenReturn(List.of(detected));
+
+        List<TrackedMessageSummaryResponse> response =
+                trackingService.listRecent("user@example.com");
+
+        assertEquals(1, response.size());
+        TrackedMessageSummaryResponse summary = response.getFirst();
+        assertEquals(42L, summary.sentMessageId());
+        assertEquals("recipient@example.com", summary.recipient());
+        assertEquals("Thesis update", summary.subject());
+        assertEquals("IMAGE_LOAD_DETECTED", summary.status());
+        assertEquals(2, summary.pixelLoadCount());
+        verify(sentMessageRepository)
+                .findTop50ByUserAndTrackingEnabledTrueOrderBySentAtDesc(user);
+        verify(trackingEventRepository, never())
+                .findTop10BySentMessageOrderByLoadedAtDesc(any());
     }
 
     @Test

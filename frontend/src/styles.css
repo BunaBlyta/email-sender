@@ -2689,6 +2689,12 @@ textarea:focus {
   color: #cbd5e1;
 }
 
+.tracking-message-row.active,
+.tracking-message-row.active:hover {
+  border-color: var(--green-border);
+  background: var(--green-bg);
+}
+
 @media (max-width: 900px) {
   .sidebar {
     background: rgba(15, 23, 42, 0.94);

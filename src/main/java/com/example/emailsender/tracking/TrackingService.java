@@ -83,11 +83,20 @@ public class TrackingService {
 
     @Transactional(readOnly = true)
     public TrackingResponse getStatus(String email, Long sentMessageId) {
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        User user = findUser(email);
         SentMessage message = sentMessageRepository.findByIdAndUser(sentMessageId, user)
                 .orElseThrow(() -> new ResourceNotFoundException("Sent message not found"));
         return toResponse(message);
+    }
+
+    @Transactional(readOnly = true)
+    public List<TrackedMessageSummaryResponse> listRecent(String email) {
+        User user = findUser(email);
+        return sentMessageRepository
+                .findTop50ByUserAndTrackingEnabledTrueOrderBySentAtDesc(user)
+                .stream()
+                .map(this::toSummaryResponse)
+                .toList();
     }
 
     public TrackingResponse toResponse(SentMessage message) {
@@ -100,6 +109,28 @@ public class TrackingService {
                 message.getLastPixelLoadedAt(),
                 recentEvents(message)
         );
+    }
+
+    private TrackedMessageSummaryResponse toSummaryResponse(SentMessage message) {
+        return new TrackedMessageSummaryResponse(
+                message.getId(),
+                message.getRecipient(),
+                message.getSubject(),
+                message.getSentAt(),
+                message.isScheduled(),
+                status(message),
+                message.getPixelLoadCount(),
+                message.getFirstPixelLoadedAt(),
+                message.getLastPixelLoadedAt()
+        );
+    }
+
+    private User findUser(String email) {
+        if (email == null || email.isBlank()) {
+            throw new IllegalArgumentException("Authenticated user has no email address");
+        }
+        return userRepository.findByEmail(email)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
     }
 
     private TrackingEvent toEvent(
