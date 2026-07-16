@@ -213,6 +213,7 @@ public class GmailProvider implements MailProvider {
                 toLocalDateTime(gmailMessage.getInternalDate()),
                 direction(sender, user.getEmail()),
                 read,
+                listUnsubscribeHeader(gmailMessage),
                 extractAttachments(gmailMessage.getPayload())
         );
     }
@@ -386,6 +387,10 @@ public class GmailProvider implements MailProvider {
                 .map(this::decodeHeader)
                 .findFirst()
                 .orElse("");
+    }
+
+    String listUnsubscribeHeader(com.google.api.services.gmail.model.Message message) {
+        return getHeader(message, "List-Unsubscribe");
     }
 
     String decodeHeader(String value) {

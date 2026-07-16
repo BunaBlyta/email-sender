@@ -14,6 +14,7 @@ public record FetchedMessage(
         LocalDateTime sentAt,
         Message.Direction direction,
         boolean read,
+        String listUnsubscribeHeader,
         List<FetchedAttachment> attachments
 ) {
 }

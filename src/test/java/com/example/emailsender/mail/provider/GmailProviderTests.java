@@ -4,6 +4,7 @@ import com.example.emailsender.auth.TokenStore;
 import com.example.emailsender.mail.provider.FetchedAttachment;
 import com.google.api.services.gmail.model.MessagePart;
 import com.google.api.services.gmail.model.MessagePartBody;
+import com.google.api.services.gmail.model.MessagePartHeader;
 import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
@@ -77,6 +78,22 @@ class GmailProviderTests {
         assertEquals("report.pdf", attachments.getFirst().filename());
         assertEquals("application/pdf", attachments.getFirst().mimeType());
         assertEquals(1200L, attachments.getFirst().sizeBytes());
+    }
+
+    @Test
+    void extractsListUnsubscribeHeaderCaseInsensitively() {
+        com.google.api.services.gmail.model.Message message =
+                new com.google.api.services.gmail.model.Message()
+                        .setPayload(new MessagePart().setHeaders(List.of(
+                                new MessagePartHeader()
+                                        .setName("list-unsubscribe")
+                                        .setValue("<https://example.com/unsubscribe/123>")
+                        )));
+
+        assertEquals(
+                "<https://example.com/unsubscribe/123>",
+                gmailProvider.listUnsubscribeHeader(message)
+        );
     }
 
     private String base64Url(String value) {

@@ -6,6 +6,7 @@ import com.example.emailsender.mail.provider.FetchedAttachment;
 import com.example.emailsender.mail.provider.FetchedMessage;
 import com.example.emailsender.mail.provider.FetchedThread;
 import com.example.emailsender.mail.provider.GmailProvider;
+import com.example.emailsender.inbox.cleanup.UnsubscribeService;
 import com.example.emailsender.user.User;
 import com.example.emailsender.user.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -32,7 +33,11 @@ class InboxServiceTests {
     void setUp() {
         userRepository = mock(UserRepository.class);
         gmailProvider = mock(GmailProvider.class);
-        inboxService = new InboxService(userRepository, gmailProvider);
+        inboxService = new InboxService(
+                userRepository,
+                gmailProvider,
+                new UnsubscribeService()
+        );
     }
 
     @Test
@@ -82,6 +87,7 @@ class InboxServiceTests {
                         sentAt,
                         Message.Direction.INBOUND,
                         true,
+                        "<mailto:leave@example.com?subject=Please%20unsubscribe>",
                         List.of(new FetchedAttachment(
                                 "report.pdf",
                                 "application/pdf",
@@ -101,6 +107,11 @@ class InboxServiceTests {
         assertEquals(1, response.messages().size());
         assertEquals("message-123", response.messages().getFirst().externalMessageId());
         assertEquals(Message.Direction.INBOUND, response.messages().getFirst().direction());
+        assertEquals("MAILTO", response.messages().getFirst().unsubscribe().method().name());
+        assertEquals("mailto:leave@example.com",
+                response.messages().getFirst().unsubscribe().url());
+        assertEquals("leave@example.com",
+                response.messages().getFirst().unsubscribe().destination());
         assertEquals("report.pdf",
                 response.messages().getFirst().attachments().getFirst().filename());
         verify(gmailProvider).fetchThread(user, "thread-123");

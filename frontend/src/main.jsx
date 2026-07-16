@@ -269,6 +269,38 @@ function App() {
     });
   }
 
+  function beginUnsubscribe(option) {
+    setError("");
+    setNotice("");
+
+    try {
+      const parsedUrl = new URL(option?.url || "");
+      const isHttps = option?.method === "HTTPS" && parsedUrl.protocol === "https:";
+      const isMailto = option?.method === "MAILTO" && parsedUrl.protocol === "mailto:";
+      if (!isHttps && !isMailto) {
+        throw new Error("This unsubscribe option is not supported safely.");
+      }
+
+      const destination = isHttps ? parsedUrl.host : option.destination;
+      const prompt = isHttps
+        ? `Open the unsubscribe URL at ${destination}?\n\nVisiting it may unsubscribe you immediately, depending on the sender.`
+        : `Prepare an unsubscribe email to ${destination}?\n\nReview and send the draft in your email app to complete the request.`;
+      if (!window.confirm(prompt)) {
+        return;
+      }
+
+      if (isHttps) {
+        window.open(option.url, "_blank", "noopener,noreferrer");
+        setNotice("Unsubscribe URL opened. The sender may have applied the request.");
+      } else {
+        window.location.assign(option.url);
+        setNotice("Unsubscribe email prepared. Review and send it to complete the request.");
+      }
+    } catch {
+      setError("This unsubscribe option is not supported safely.");
+    }
+  }
+
   async function updateThreadCategory(threadId, category) {
     await run(async () => {
       const context = await api(`/inbox/threads/${encodeURIComponent(threadId)}/category`, {
@@ -747,6 +779,7 @@ function App() {
             onRefresh={() => run(() => refreshTriage())}
             onOpenThread={openThread}
             onCleanup={cleanupThread}
+            onUnsubscribe={beginUnsubscribe}
             onUpdateCategory={updateThreadCategory}
             onUpdateWorkflowState={updateThreadWorkflowState}
             onTrustThreadSender={trustThreadSender}
@@ -766,6 +799,7 @@ function App() {
             onSearch={submitSearch}
             onOpenThread={openThread}
             onCleanup={cleanupThread}
+            onUnsubscribe={beginUnsubscribe}
             onUpdateCategory={updateThreadCategory}
             onUpdateWorkflowState={updateThreadWorkflowState}
             onTrustThreadSender={trustThreadSender}
@@ -955,6 +989,7 @@ function InboxView({
   onRefresh,
   onOpenThread,
   onCleanup,
+  onUnsubscribe,
   onUpdateCategory,
   onUpdateWorkflowState,
   onTrustThreadSender,
@@ -975,6 +1010,7 @@ function InboxView({
       thread={selectedThread}
       triage={selectedTriage}
       onCleanup={onCleanup}
+      onUnsubscribe={onUnsubscribe}
       context={threadContext}
       onUpdateCategory={onUpdateCategory}
       onUpdateWorkflowState={onUpdateWorkflowState}
@@ -1123,6 +1159,7 @@ function SearchView({
   onSearch,
   onOpenThread,
   onCleanup,
+  onUnsubscribe,
   onUpdateCategory,
   onUpdateWorkflowState,
   onTrustThreadSender,
@@ -1176,6 +1213,7 @@ function SearchView({
         thread={selectedThread}
         triage={selectedSearchThread}
         onCleanup={onCleanup}
+        onUnsubscribe={onUnsubscribe}
         context={threadContext}
         onUpdateCategory={onUpdateCategory}
         onUpdateWorkflowState={onUpdateWorkflowState}
@@ -1191,6 +1229,7 @@ function ThreadWorkspace({
   triage,
   context,
   onCleanup,
+  onUnsubscribe,
   onUpdateCategory,
   onUpdateWorkflowState,
   onTrustThreadSender,
@@ -1212,6 +1251,7 @@ function ThreadWorkspace({
         triage={triage}
         context={context}
         onCleanup={onCleanup}
+        onUnsubscribe={onUnsubscribe}
         onUpdateCategory={onUpdateCategory}
         onUpdateWorkflowState={onUpdateWorkflowState}
         onTrustThreadSender={onTrustThreadSender}
@@ -1270,6 +1310,7 @@ function ThreadContextPanel({
   triage,
   context,
   onCleanup,
+  onUnsubscribe,
   onUpdateCategory,
   onUpdateWorkflowState,
   onTrustThreadSender,
@@ -1278,6 +1319,10 @@ function ThreadContextPanel({
   const attachments = (thread.messages || []).flatMap((message) => message.attachments || []);
   const latestMessage = [...(thread.messages || [])]
     .sort((left, right) => new Date(right.sentAt || 0) - new Date(left.sentAt || 0))[0];
+  const unsubscribe = [...(thread.messages || [])]
+    .filter((message) => message.direction === "INBOUND" && message.unsubscribe)
+    .sort((left, right) => new Date(right.sentAt || 0) - new Date(left.sentAt || 0))[0]
+    ?.unsubscribe;
   const category = context?.category || "";
   const workflowState = context?.workflowState || "";
   const riskLevel = context?.phishingRiskLevel || "LOW";
@@ -1307,6 +1352,24 @@ function ThreadContextPanel({
         <strong>{primaryParticipant(thread.participants, latestMessage?.sender)}</strong>
         <span>{latestMessage?.sender || "Unknown sender"}</span>
       </div>
+      {unsubscribe && (
+        <div className="context-section unsubscribe-section">
+          <h3>Mailing list</h3>
+          <strong>Unsubscribe available</strong>
+          <span>
+            {unsubscribe.method === "HTTPS" ? "Secure page" : "Email request"}
+            {` · ${unsubscribe.destination}`}
+          </span>
+          <p>The sender controls this step. Opening the URL may act immediately; the app cannot confirm final status.</p>
+          <button
+            type="button"
+            className="secondary"
+            onClick={() => onUnsubscribe(unsubscribe)}
+          >
+            {unsubscribe.method === "HTTPS" ? "Open unsubscribe page" : "Prepare unsubscribe email"}
+          </button>
+        </div>
+      )}
       <div className="context-section">
         <h3>Control</h3>
         <label className="context-control">

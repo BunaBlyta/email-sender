@@ -321,6 +321,7 @@ class ThreadContextServiceTests {
                 LocalDateTime.of(2026, 6, 25, 12, 0),
                 direction,
                 true,
+                null,
                 List.of()
         );
     }

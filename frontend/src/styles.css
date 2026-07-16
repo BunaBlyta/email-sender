@@ -1086,6 +1086,22 @@ h1 {
   white-space: nowrap;
 }
 
+.unsubscribe-section {
+  border: 1px solid #e5dfd6;
+  border-radius: 7px;
+  background: #f7f4ee;
+  padding: 10px;
+}
+
+.unsubscribe-section p {
+  margin: 0;
+}
+
+.unsubscribe-section button {
+  width: 100%;
+  justify-content: center;
+}
+
 .context-list {
   display: grid;
   gap: 6px;
@@ -2096,6 +2112,11 @@ h3 {
 
 .context-list.compact {
   border-top-color: var(--border);
+}
+
+.unsubscribe-section {
+  border-color: var(--border);
+  background: var(--surface-soft);
 }
 
 .context-actions.quick-actions {

@@ -14,6 +14,7 @@ public record InboxMessageResponse(
         LocalDateTime sentAt,
         Message.Direction direction,
         boolean read,
+        InboxUnsubscribeResponse unsubscribe,
         List<InboxAttachmentResponse> attachments
 ) {
 }

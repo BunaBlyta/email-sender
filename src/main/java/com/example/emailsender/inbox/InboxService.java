@@ -1,5 +1,7 @@
 package com.example.emailsender.inbox;
 
+import com.example.emailsender.inbox.cleanup.UnsubscribeOption;
+import com.example.emailsender.inbox.cleanup.UnsubscribeService;
 import com.example.emailsender.mail.model.MailThread;
 import com.example.emailsender.mail.provider.FetchedAttachment;
 import com.example.emailsender.mail.provider.FetchedMessage;
@@ -20,10 +22,15 @@ public class InboxService {
 
     private final UserRepository userRepository;
     private final GmailProvider gmailProvider;
+    private final UnsubscribeService unsubscribeService;
 
-    public InboxService(UserRepository userRepository, GmailProvider gmailProvider) {
+    public InboxService(
+            UserRepository userRepository,
+            GmailProvider gmailProvider,
+            UnsubscribeService unsubscribeService) {
         this.userRepository = userRepository;
         this.gmailProvider = gmailProvider;
+        this.unsubscribeService = unsubscribeService;
     }
 
     public List<InboxThreadResponse> getThreadsForUser(String email, int maxResults) {
@@ -86,9 +93,20 @@ public class InboxService {
                 message.sentAt(),
                 message.direction(),
                 message.read(),
+                unsubscribeService.findOption(message.listUnsubscribeHeader())
+                        .map(this::toUnsubscribeResponse)
+                        .orElse(null),
                 message.attachments().stream()
                         .map(this::toAttachmentResponse)
                         .toList()
+        );
+    }
+
+    private InboxUnsubscribeResponse toUnsubscribeResponse(UnsubscribeOption option) {
+        return new InboxUnsubscribeResponse(
+                option.method(),
+                option.url(),
+                option.destination()
         );
     }
 
