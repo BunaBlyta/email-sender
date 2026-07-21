@@ -95,6 +95,13 @@ public class ScheduleService {
         return toResponse(scheduledMessageRepository.save(message));
     }
 
+    @Transactional
+    public void delete(String email, Long id) {
+        User user = findUser(email);
+        ScheduledMessage message = findOwnedMessage(user, id);
+        scheduledMessageRepository.delete(message);
+    }
+
     @Transactional(readOnly = true)
     public List<Long> findDueMessageIds() {
         return scheduledMessageRepository

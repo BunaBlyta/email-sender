@@ -122,6 +122,17 @@ class ScheduleServiceTests {
     }
 
     @Test
+    void deletesOwnedScheduledMessage() {
+        ScheduledMessage message = message(7L, ScheduledMessage.Status.CANCELLED);
+        when(scheduledMessageRepository.findByIdAndUser(7L, user))
+                .thenReturn(Optional.of(message));
+
+        scheduleService.delete("user@example.com", 7L);
+
+        verify(scheduledMessageRepository).delete(message);
+    }
+
+    @Test
     void claimsPendingMessageAtomically() {
         when(scheduledMessageRepository.claimForSending(
                 3L,

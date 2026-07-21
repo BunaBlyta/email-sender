@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./styles.css";
 
@@ -15,6 +15,145 @@ const initialTemplateForm = {
   body: "",
   category: "General"
 };
+
+const starterTemplates = [
+  {
+    id: "starter-follow-up",
+    builtIn: true,
+    name: "Polite Follow-Up",
+    category: "Follow-up",
+    subject: "Following up",
+    body: `Hi [Name],
+
+I wanted to follow up on my previous message and see if you had a chance to review it.
+
+No rush if this is still in progress. Let me know if there is anything you need from me.
+
+Best,
+[Your Name]`
+  },
+  {
+    id: "starter-meeting-request",
+    builtIn: true,
+    name: "Meeting Request",
+    category: "Scheduling",
+    subject: "Quick meeting?",
+    body: `Hi [Name],
+
+Would you be available for a quick meeting to discuss [topic]?
+
+I am available [option 1], [option 2], or [option 3]. Let me know what works best for you.
+
+Best,
+[Your Name]`
+  },
+  {
+    id: "starter-meeting-recap",
+    builtIn: true,
+    name: "Meeting Recap",
+    category: "Recap",
+    subject: "Recap and next steps",
+    body: `Hi [Name],
+
+Thanks for the conversation today. Here is a quick recap:
+
+- [Decision or takeaway]
+- [Open item]
+- [Next step and owner]
+
+I will [your next step] by [date].
+
+Best,
+[Your Name]`
+  },
+  {
+    id: "starter-status-update",
+    builtIn: true,
+    name: "Status Update",
+    category: "Update",
+    subject: "Status update on [topic]",
+    body: `Hi [Name],
+
+Quick update on [topic]:
+
+- Completed: [what is done]
+- In progress: [what is moving]
+- Blocked: [anything blocked, or "none"]
+- Next: [next action]
+
+I will send another update by [date].
+
+Best,
+[Your Name]`
+  },
+  {
+    id: "starter-request-info",
+    builtIn: true,
+    name: "Request Information",
+    category: "Request",
+    subject: "Request for [information/document]",
+    body: `Hi [Name],
+
+Could you please send over [information/document] when you have a chance?
+
+It would be helpful to have it by [date] so I can [reason].
+
+Thanks,
+[Your Name]`
+  },
+  {
+    id: "starter-thank-you",
+    builtIn: true,
+    name: "Thank You",
+    category: "Relationship",
+    subject: "Thank you",
+    body: `Hi [Name],
+
+Thank you for your help with [topic]. I appreciate the time and effort you put into it.
+
+It made a real difference for [result/context].
+
+Best,
+[Your Name]`
+  },
+  {
+    id: "starter-delay-apology",
+    builtIn: true,
+    name: "Delay Apology",
+    category: "Support",
+    subject: "Apologies for the delay",
+    body: `Hi [Name],
+
+Apologies for the delay getting back to you.
+
+I have now reviewed this, and [answer/update]. The next step is [next step].
+
+Thank you for your patience.
+
+Best,
+[Your Name]`
+  },
+  {
+    id: "starter-introduction",
+    builtIn: true,
+    name: "Introduction",
+    category: "Relationship",
+    subject: "Introduction: [Name] <> [Name]",
+    body: `Hi [Name A] and [Name B],
+
+I wanted to introduce you both.
+
+[Name A], [brief context].
+[Name B], [brief context].
+
+I think it would be useful for you to connect about [reason].
+
+I will let you both take it from here.
+
+Best,
+[Your Name]`
+  }
+];
 
 const initialGroupForm = {
   name: "",
@@ -34,6 +173,9 @@ const initialScreenerForm = {
   body: "Could we talk?"
 };
 
+const trackingLinkStorageKey = "email-platform-tracked-message-links";
+const themeStorageKey = "email-platform-theme";
+
 const phishingSample = {
   sender: "PayPal Support <support@paypal-alerts.example>",
   subject: "Urgent: verify your account",
@@ -42,22 +184,16 @@ const phishingSample = {
 
 const threadCategories = ["PEOPLE", "THINGS", "NOISE"];
 const threadWorkflowStates = ["ACTIVE", "NEEDS_ACTION", "AWAITING_REPLY", "DONE", "ARCHIVED"];
-const inboxFilters = [
-  { key: "ALL", label: "All", labels: null },
-  { key: "NEEDS_REPLY", label: "Needs Action", labels: ["NEEDS_REPLY"] },
-  { key: "WAITING", label: "Awaiting Reply", labels: ["WAITING"] },
-  { key: "SECURITY_REVIEW", label: "Security Review", labels: ["SECURITY_REVIEW"] },
-  { key: "IMPORTANT", label: "Important", labels: ["IMPORTANT"] },
-  { key: "FYI", label: "FYI", labels: ["FYI"] },
-  { key: "LOW_PRIORITY", label: "Low Priority", labels: ["LOW_PRIORITY"] }
-];
 
 function App() {
   const [activeView, setActiveView] = useState("inbox");
+  const [navExpanded, setNavExpanded] = useState(false);
+  const [theme, setTheme] = useState(readThemePreference);
   const [account, setAccount] = useState(null);
   const [inboxThreads, setInboxThreads] = useState([]);
   const [triageInbox, setTriageInbox] = useState(null);
   const [selectedThread, setSelectedThread] = useState(null);
+  const [inboxFocusMode, setInboxFocusMode] = useState(false);
   const [threadContext, setThreadContext] = useState(null);
   const [inboxMaxResults, setInboxMaxResults] = useState(20);
   const [searchQuery, setSearchQuery] = useState("");
@@ -66,6 +202,9 @@ function App() {
   const [templates, setTemplates] = useState([]);
   const [drafts, setDrafts] = useState([]);
   const [activeDraftId, setActiveDraftId] = useState(null);
+  const [draftReturnAvailable, setDraftReturnAvailable] = useState(false);
+  const [templateReturnTarget, setTemplateReturnTarget] = useState(null);
+  const [composeListReturnTarget, setComposeListReturnTarget] = useState(null);
   const [lastDraftSnapshot, setLastDraftSnapshot] = useState("");
   const [draftStatus, setDraftStatus] = useState("");
   const [recipientGroups, setRecipientGroups] = useState([]);
@@ -85,15 +224,37 @@ function App() {
   const [lastSend, setLastSend] = useState(null);
   const [bulkResult, setBulkResult] = useState(null);
   const [trackedMessages, setTrackedMessages] = useState([]);
+  const [trackedMessageLinks, setTrackedMessageLinks] = useState(readTrackedMessageLinks);
   const [trackingMessageId, setTrackingMessageId] = useState("");
   const [trackingResult, setTrackingResult] = useState(null);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const visibleTemplates = mergeStarterTemplates(templates);
 
   useEffect(() => {
     loadInitialData();
   }, []);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    try {
+      window.localStorage.setItem(themeStorageKey, theme);
+    } catch {
+      // Theme still applies for this session if browser storage is unavailable.
+    }
+  }, [theme]);
+
+  useEffect(() => {
+    if (!notice && !error) {
+      return undefined;
+    }
+    const timer = window.setTimeout(() => {
+      setNotice("");
+      setError("");
+    }, error ? 5200 : 3400);
+    return () => window.clearTimeout(timer);
+  }, [notice, error]);
 
   useEffect(() => {
     if (activeView !== "compose") {
@@ -114,11 +275,6 @@ function App() {
     }, 1400);
     return () => window.clearTimeout(timer);
   }, [activeView, composeForm, scheduleAt, activeDraftId, lastDraftSnapshot]);
-
-  const riskTone = useMemo(() => {
-    const level = evaluation?.phishing?.riskLevel || phishingResult?.riskLevel;
-    return riskClass(level);
-  }, [evaluation, phishingResult]);
 
   async function api(path, options = {}) {
     const response = await fetch(path, {
@@ -219,7 +375,18 @@ function App() {
     setThreadContext(context);
   }
 
+  function closeThread() {
+    setSelectedThread(null);
+    setThreadContext(null);
+    setInboxFocusMode(false);
+  }
+
   async function openThread(threadId) {
+    if (selectedThread?.externalThreadId === threadId) {
+      closeThread();
+      return;
+    }
+
     await run(async () => {
       await loadThread(threadId);
     });
@@ -413,6 +580,7 @@ function App() {
             body: JSON.stringify(payload)
           });
       setLastSend(response);
+      rememberTrackedMessageLink(response);
       setNotice("Message sent.");
       if (response?.id) {
         setTrackingMessageId(String(response.id));
@@ -444,7 +612,7 @@ function App() {
       setNotice("Message scheduled.");
       await refreshScheduledMessages();
       setManageTab("scheduled");
-      setActiveView("scheduled");
+      setActiveView("drafts");
       setLastSend(response);
       resetComposeAfterDelivery();
       await discardActiveDraft();
@@ -458,6 +626,14 @@ function App() {
     await run(async () => {
       const snapshot = draftSnapshot(composeForm, scheduleAt);
       await saveDraftSnapshot(snapshot, false);
+      setComposeForm(initialComposeForm);
+      setComposeFile(null);
+      setScheduleAt(defaultDateTimeLocal());
+      setActiveDraftId(null);
+      setDraftReturnAvailable(false);
+      setTemplateReturnTarget(null);
+      setLastDraftSnapshot("");
+      setDraftStatus("");
       setNotice("Draft saved.");
     });
   }
@@ -484,7 +660,9 @@ function App() {
   }
 
   async function loadDraft(draft) {
+    const openedFromDraftsPage = activeView === "drafts";
     setActiveDraftId(draft.id);
+    setTemplateReturnTarget(null);
     setComposeForm({
       recipients: (draft.recipients || []).join(", "),
       subject: draft.subject || "",
@@ -502,6 +680,26 @@ function App() {
       trackOpens: composeForm.trackOpens
     }, scheduledDate));
     setDraftStatus(`Loaded ${formatTimeOnly(draft.updatedAt)}`);
+    setDraftReturnAvailable(openedFromDraftsPage);
+    setActiveView("compose");
+  }
+
+  function loadScheduledMessage(message) {
+    const scheduledDate = message.scheduledFor
+      ? toDateTimeLocal(new Date(message.scheduledFor))
+      : defaultDateTimeLocal();
+    setActiveDraftId(null);
+    setTemplateReturnTarget(null);
+    setComposeForm({
+      recipients: (message.recipients || []).join(", "),
+      subject: message.subject || "",
+      body: message.body || "",
+      trackOpens: composeForm.trackOpens
+    });
+    setScheduleAt(scheduledDate);
+    setLastDraftSnapshot("");
+    setDraftStatus(`Scheduled ${formatDate(message.scheduledFor)}`);
+    setDraftReturnAvailable(true);
     setActiveView("compose");
   }
 
@@ -527,6 +725,8 @@ function App() {
     }
     await api(`/drafts/${activeDraftId}`, { method: "DELETE" });
     setActiveDraftId(null);
+    setDraftReturnAvailable(false);
+    setTemplateReturnTarget(null);
     setLastDraftSnapshot("");
     setDraftStatus("");
     await refreshDrafts();
@@ -536,6 +736,8 @@ function App() {
     setComposeForm(initialComposeForm);
     setComposeFile(null);
     setScheduleAt(defaultDateTimeLocal());
+    setDraftReturnAvailable(false);
+    setTemplateReturnTarget(null);
     setLastDraftSnapshot("");
     setDraftStatus("");
   }
@@ -565,10 +767,21 @@ function App() {
   }
 
   async function useTemplate(template) {
+    const returnTarget = activeView === "manage" ? "manage-templates" : activeView === "templates" ? "templates" : null;
+    if (template.builtIn) {
+      applyTemplate(template);
+      setDraftReturnAvailable(false);
+      setTemplateReturnTarget(returnTarget);
+      setActiveView("compose");
+      setNotice("Template applied.");
+      return;
+    }
     await run(async () => {
       const response = await api(`/templates/${template.id}/use`, { method: "POST" });
       applyTemplate(response);
       await refreshTemplates();
+      setDraftReturnAvailable(false);
+      setTemplateReturnTarget(returnTarget);
       setActiveView("compose");
       setNotice("Template applied.");
     });
@@ -580,6 +793,12 @@ function App() {
       subject: template.subject || "",
       body: template.body || ""
     }));
+  }
+
+  function mergeStarterTemplates(savedTemplates) {
+    const savedNames = new Set((savedTemplates || []).map((template) => template.name?.toLowerCase()));
+    const missingStarters = starterTemplates.filter((template) => !savedNames.has(template.name.toLowerCase()));
+    return [...missingStarters, ...(savedTemplates || [])];
   }
 
   async function createRecipientGroup(event) {
@@ -641,14 +860,45 @@ function App() {
     });
   }
 
-  async function openTrackingSignals(sentMessageId) {
+  async function deleteScheduled(id) {
+    if (!window.confirm("Delete this scheduled message?")) {
+      return;
+    }
+    await run(async () => {
+      await api(`/scheduled/${id}`, { method: "DELETE" });
+      setNotice("Scheduled message deleted.");
+      await refreshScheduledMessages();
+    });
+  }
+
+  async function openTrackingSignals(sentMessageId, stayInPlace = false) {
     await run(async () => {
       const response = await api(`/tracking/sent/${sentMessageId}`);
       setTrackingMessageId(String(sentMessageId));
       setTrackingResult(response);
       await refreshTrackedMessages();
-      setActiveView("tracking");
+      if (!stayInPlace) {
+        setActiveView("tracking");
+      }
       setNotice("Open signals loaded.");
+    });
+  }
+
+  function rememberTrackedMessageLink(response) {
+    if (!response?.id || !response?.externalMessageId) {
+      return;
+    }
+    setTrackedMessageLinks((current) => {
+      const next = [
+        {
+          sentMessageId: String(response.id),
+          externalMessageId: response.externalMessageId,
+          externalThreadId: response.externalThreadId || ""
+        },
+        ...current.filter((link) => link.externalMessageId !== response.externalMessageId)
+      ].slice(0, 100);
+      writeTrackedMessageLinks(next);
+      return next;
     });
   }
 
@@ -703,68 +953,116 @@ function App() {
   }
 
   return (
-    <main className="app-shell">
-      <aside className="sidebar">
-        <div className="brand">
-          <div className="brand-mark">EC</div>
-          <div>
-            <strong>Email Control Center</strong>
-            <span>Communication workspace</span>
-          </div>
-        </div>
+    <main className={`app-shell ${navExpanded ? "nav-expanded" : "nav-collapsed"}`}>
+      <aside className="sidebar" aria-label="Application navigation">
+        <button
+          type="button"
+          className="nav-toggle"
+          aria-label={navExpanded ? "Collapse navigation" : "Expand navigation"}
+          aria-expanded={navExpanded}
+          onClick={() => setNavExpanded((current) => !current)}
+        >
+          <NavIcon name="menu" />
+        </button>
         <nav className="nav">
           <NavGroup
-            title="Process"
+            title="Workspace"
             items={[
-              ["inbox", "Inbox"],
-              ["search", "Search"],
-              ["screener", "Screener"]
+              ["inbox", "Attention", "attention"],
+              ["compose", "Compose", "compose"],
+              ["tracking", "Sent Emails", "tracking"]
             ]}
             activeView={activeView}
             setActiveView={setActiveView}
+            toggleNavigation={() => setNavExpanded((current) => !current)}
           />
           <NavGroup
-            title="Send"
+            title="Organize"
             items={[
-              ["compose", "Compose"],
-              ["scheduled", "Scheduled"],
-              ["templates", "Templates"],
-              ["drafts", "Drafts"]
+              ["drafts", "Drafts", "drafts"],
+              ["templates", "Templates & Groups", "templates"],
+              ["screener", "Screener & Trust", "screener"]
             ]}
             activeView={activeView}
             setActiveView={setActiveView}
-          />
-          <NavGroup
-            title="Relationships"
-            items={[
-              ["groups", "Contacts"],
-              ["tracking", "Open signals"],
-              ["trust", "Trust"]
-            ]}
-            activeView={activeView}
-            setActiveView={setActiveView}
+            toggleNavigation={() => setNavExpanded((current) => !current)}
           />
         </nav>
-        <AccountCard account={account} />
-        <a className="login-link" href="http://localhost:8080/oauth2/authorization/google">
-          {account?.email ? "Reconnect Google" : "Google sign-in"}
-        </a>
+        <button
+          type="button"
+          className="theme-toggle"
+          aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+          aria-pressed={theme === "dark"}
+          onClick={() => setTheme((current) => (current === "dark" ? "light" : "dark"))}
+        >
+          <NavIcon name={theme === "dark" ? "sun" : "moon"} />
+          <span className="nav-label">{theme === "dark" ? "Light mode" : "Dark mode"}</span>
+        </button>
       </aside>
 
       <section className="workspace">
         <header className="topbar">
-          <div>
-            <p className="eyebrow">{modeLabel(activeView)}</p>
-            <h1>{viewTitle(activeView)}</h1>
-          </div>
+          <form className="app-search" role="search" onSubmit={submitSearch}>
+            <label className="sr-only" htmlFor="app-search-input">Search mail</label>
+            <span className="search-icon" aria-hidden="true">⌕</span>
+            <input
+              id="app-search-input"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="Search mail"
+              autoComplete="off"
+            />
+            <button
+              type="submit"
+              aria-label={loading ? "Searching mail" : "Search mail"}
+              disabled={loading}
+            >
+              {loading ? "Working…" : "Search"}
+            </button>
+          </form>
           <div className="topbar-actions">
-            {account?.email && <span className="account-chip">{account.email}</span>}
-            <div className={`status-pill ${riskTone}`}>{loading ? "Working" : "Ready"}</div>
+            {activeView === "inbox" && selectedThread && !inboxFocusMode && (
+              <button
+                type="button"
+                className="secondary compose-shortcut"
+                onClick={() => setInboxFocusMode(true)}
+              >
+                Focus
+              </button>
+            )}
+            <button
+              type="button"
+              className="primary compose-shortcut"
+              onClick={() => setActiveView("compose")}
+            >
+              Compose
+            </button>
+            <a
+              className="topbar-account"
+              href="http://localhost:8080/oauth2/authorization/google"
+              title={account?.email ? "Reconnect Google" : "Google sign-in"}
+            >
+              <span>{account?.name || account?.email || "Not signed in"}</span>
+            </a>
           </div>
         </header>
 
-        {notice && <div className="notice">{notice}</div>}
-        {error && <div className="error">{error}</div>}
+        {(notice || error) && (
+          <div className="toast-stack" aria-live="polite" aria-atomic="true">
+            {notice && (
+              <div className="toast notice" role="status">
+                <span>{notice}</span>
+                <button type="button" aria-label="Dismiss notification" onClick={() => setNotice("")}>×</button>
+              </div>
+            )}
+            {error && (
+              <div className="toast error" role="alert">
+                <span>{error}</span>
+                <button type="button" aria-label="Dismiss error" onClick={() => setError("")}>×</button>
+              </div>
+            )}
+          </div>
+        )}
 
         {activeView === "inbox" && (
           <InboxView
@@ -778,12 +1076,19 @@ function App() {
             onSearch={submitSearch}
             onRefresh={() => run(() => refreshTriage())}
             onOpenThread={openThread}
+            onCloseThread={closeThread}
             onCleanup={cleanupThread}
             onUnsubscribe={beginUnsubscribe}
             onUpdateCategory={updateThreadCategory}
             onUpdateWorkflowState={updateThreadWorkflowState}
             onTrustThreadSender={trustThreadSender}
             onTrustThreadDomain={trustThreadDomain}
+            trackedMessageLinks={trackedMessageLinks}
+            trackingMessageId={trackingMessageId}
+            trackingResult={trackingResult}
+            onViewOpenSignals={(id) => openTrackingSignals(id, true)}
+            focusMode={inboxFocusMode}
+            setFocusMode={setInboxFocusMode}
           />
         )}
 
@@ -798,12 +1103,17 @@ function App() {
             setMaxResults={setInboxMaxResults}
             onSearch={submitSearch}
             onOpenThread={openThread}
+            onCloseThread={closeThread}
             onCleanup={cleanupThread}
             onUnsubscribe={beginUnsubscribe}
             onUpdateCategory={updateThreadCategory}
             onUpdateWorkflowState={updateThreadWorkflowState}
             onTrustThreadSender={trustThreadSender}
             onTrustThreadDomain={trustThreadDomain}
+            trackedMessageLinks={trackedMessageLinks}
+            trackingMessageId={trackingMessageId}
+            trackingResult={trackingResult}
+            onViewOpenSignals={(id) => openTrackingSignals(id, true)}
           />
         )}
 
@@ -813,10 +1123,13 @@ function App() {
             setForm={setComposeForm}
             file={composeFile}
             setFile={setComposeFile}
-            templates={templates}
+            templates={visibleTemplates}
             drafts={drafts}
+            groups={recipientGroups}
             activeDraftId={activeDraftId}
             draftStatus={draftStatus}
+            draftReturnAvailable={draftReturnAvailable}
+            templateReturnTarget={templateReturnTarget}
             scheduleAt={scheduleAt}
             setScheduleAt={setScheduleAt}
             lastSend={lastSend}
@@ -826,7 +1139,31 @@ function App() {
             onLoadDraft={loadDraft}
             onDeleteDraft={deleteDraft}
             onApplyTemplate={applyTemplate}
-            onViewOpenSignals={openTrackingSignals}
+            onSeeAllTemplates={() => {
+              setComposeListReturnTarget("templates");
+              setActiveView("templates");
+            }}
+            onSeeAllDrafts={() => {
+              setComposeListReturnTarget("drafts");
+              setActiveView("drafts");
+            }}
+            onBackToDrafts={() => {
+              setDraftReturnAvailable(false);
+              setActiveView("drafts");
+            }}
+            onBackToTemplates={() => {
+              const target = templateReturnTarget;
+              setTemplateReturnTarget(null);
+              if (target === "manage-templates") {
+                setManageTab("templates");
+                setActiveView("manage");
+                return;
+              }
+              setActiveView("templates");
+            }}
+            trackingMessageId={trackingMessageId}
+            trackingResult={trackingResult}
+            onViewOpenSignals={(id) => openTrackingSignals(id, true)}
           />
         )}
 
@@ -836,6 +1173,15 @@ function App() {
             onRefresh={() => run(refreshDrafts)}
             onLoadDraft={loadDraft}
             onDeleteDraft={deleteDraft}
+            scheduledMessages={scheduledMessages}
+            onRefreshScheduled={() => run(refreshScheduledMessages)}
+            onCancelScheduled={cancelScheduled}
+            onDeleteScheduled={deleteScheduled}
+            onLoadScheduled={loadScheduledMessage}
+            onBackToCompose={composeListReturnTarget === "drafts" ? () => {
+              setComposeListReturnTarget(null);
+              setActiveView("compose");
+            } : null}
           />
         )}
 
@@ -843,7 +1189,7 @@ function App() {
           <ManageView
             activeTab={manageTab}
             setActiveTab={setManageTab}
-            templates={templates}
+            templates={visibleTemplates}
             templateForm={templateForm}
             setTemplateForm={setTemplateForm}
             onCreateTemplate={createTemplate}
@@ -863,6 +1209,7 @@ function App() {
             scheduledMessages={scheduledMessages}
             onRefreshScheduled={() => run(refreshScheduledMessages)}
             onCancelScheduled={cancelScheduled}
+            onDeleteScheduled={deleteScheduled}
             screenerForm={screenerForm}
             setScreenerForm={setScreenerForm}
             evaluation={evaluation}
@@ -892,38 +1239,25 @@ function App() {
           />
         )}
 
-        {activeView === "templates" && (
-          <TemplatesView
-            templates={templates}
-            form={templateForm}
-            setForm={setTemplateForm}
-            onCreate={createTemplate}
-            onDelete={deleteTemplate}
-            onUse={useTemplate}
-            onRefresh={() => run(refreshTemplates)}
-          />
-        )}
-
-        {activeView === "groups" && (
-          <GroupsView
+        {(activeView === "templates" || activeView === "groups") && (
+          <TemplatesGroupsView
+            templates={visibleTemplates}
+            templateForm={templateForm}
+            setTemplateForm={setTemplateForm}
+            onCreateTemplate={createTemplate}
+            onDeleteTemplate={deleteTemplate}
+            onUseTemplate={useTemplate}
+            onRefreshTemplates={() => run(refreshTemplates)}
             groups={recipientGroups}
-            form={groupForm}
-            setForm={setGroupForm}
-            bulkForm={bulkForm}
-            setBulkForm={setBulkForm}
-            bulkResult={bulkResult}
-            onCreate={createRecipientGroup}
-            onDelete={deleteRecipientGroup}
-            onBulkSend={sendBulk}
-            onRefresh={() => run(refreshRecipientGroups)}
-          />
-        )}
-
-        {activeView === "scheduled" && (
-          <ScheduledView
-            messages={scheduledMessages}
-            onRefresh={() => run(refreshScheduledMessages)}
-            onCancel={cancelScheduled}
+            groupForm={groupForm}
+            setGroupForm={setGroupForm}
+            onCreateGroup={createRecipientGroup}
+            onDeleteGroup={deleteRecipientGroup}
+            onRefreshGroups={() => run(refreshRecipientGroups)}
+            onBackToCompose={composeListReturnTarget === "templates" ? () => {
+              setComposeListReturnTarget(null);
+              setActiveView("compose");
+            } : null}
           />
         )}
 
@@ -937,8 +1271,8 @@ function App() {
           />
         )}
 
-        {activeView === "screener" && (
-          <ScreenerView
+        {(activeView === "screener" || activeView === "trust") && (
+          <ScreenerTrustView
             form={screenerForm}
             setForm={setScreenerForm}
             evaluation={evaluation}
@@ -952,6 +1286,10 @@ function App() {
               "Sender rejected.",
               "Reject this sender?"
             )}
+            trust={trust}
+            onRefreshTrust={() => run(refreshTrust)}
+            onTrustSender={(value) => trustValue("/security/trust/senders", value, "Sender trusted.")}
+            onTrustDomain={(value) => trustValue("/security/trust/domains", value, "Domain trusted.")}
           />
         )}
 
@@ -964,14 +1302,6 @@ function App() {
           />
         )}
 
-        {activeView === "trust" && (
-          <TrustView
-            trust={trust}
-            onRefresh={() => run(refreshTrust)}
-            onTrustSender={(value) => trustValue("/security/trust/senders", value, "Sender trusted.")}
-            onTrustDomain={(value) => trustValue("/security/trust/domains", value, "Domain trusted.")}
-          />
-        )}
       </section>
     </main>
   );
@@ -988,23 +1318,32 @@ function InboxView({
   onSearch,
   onRefresh,
   onOpenThread,
+  onCloseThread,
   onCleanup,
   onUnsubscribe,
   onUpdateCategory,
   onUpdateWorkflowState,
   onTrustThreadSender,
-  onTrustThreadDomain
+  onTrustThreadDomain,
+  trackedMessageLinks,
+  trackingMessageId,
+  trackingResult,
+  onViewOpenSignals,
+  focusMode,
+  setFocusMode
 }) {
-  const [activeFilter, setActiveFilter] = useState("ALL");
-  const [focusMode, setFocusMode] = useState(false);
+  const [activeFilter, setActiveFilter] = useState("PEOPLE");
   const threads = triage?.threads || [];
   const selectedTriage = threads.find(
     (thread) => thread.externalThreadId === selectedThread?.externalThreadId
   );
-  const activeFilterConfig = inboxFilters.find((filter) => filter.key === activeFilter) || inboxFilters[0];
-  const visibleThreads = activeFilterConfig.labels
-    ? threads.filter((thread) => activeFilterConfig.labels.includes(thread.label))
-    : threads;
+  const visibleThreads = threads.filter((thread) => (
+    (thread.category || thread.suggestedCategory) === activeFilter
+  ));
+  const categoryTabs = threadCategories.map((category) => ({
+    key: category,
+    label: categoryLabel(category)
+  }));
   const threadWorkspace = (
     <ThreadWorkspace
       thread={selectedThread}
@@ -1016,117 +1355,71 @@ function InboxView({
       onUpdateWorkflowState={onUpdateWorkflowState}
       onTrustThreadSender={onTrustThreadSender}
       onTrustThreadDomain={onTrustThreadDomain}
+      trackedMessageLinks={trackedMessageLinks}
+      trackingMessageId={trackingMessageId}
+      trackingResult={trackingResult}
+      onViewOpenSignals={onViewOpenSignals}
+      onClose={focusMode ? () => setFocusMode(false) : onCloseThread}
+      showHeaderDate={focusMode}
     />
   );
 
   if (focusMode && selectedThread) {
     return (
       <div className="focus-layout">
-        <div className="focus-topbar">
-          <div>
-            <p className="eyebrow">Triage Mode</p>
-            <h2>{selectedThread.subject || "Selected conversation"}</h2>
-          </div>
-          <button type="button" onClick={() => setFocusMode(false)}>Back to queue</button>
-        </div>
         {threadWorkspace}
       </div>
     );
   }
 
   return (
-    <div className="process-layout">
+    <div className={`process-layout attention-layout ${selectedThread ? "" : "no-thread-selected"}`}>
       <section className="queue-panel">
         <div className="queue-header">
-          <div>
-            <div className="queue-title-line">
-              <h2>Attention Queue</h2>
-              <span>{triage?.totalThreads || threads.length || 0} threads</span>
-            </div>
-            <div className="summary-strip">
-              <SummaryCount label="Needs Action" value={triage?.needsReplyCount || 0} tone="amber" />
-              <SummaryCount label="Important" value={triage?.importantCount || 0} tone="blue" />
-              <SummaryCount label="Waiting" value={triage?.waitingCount || 0} tone="neutral" />
-              <SummaryCount label="Risk" value={triage?.securityReviewCount || 0} tone="red" />
-            </div>
-          </div>
+          <InboxFilterBar
+            filters={categoryTabs}
+            activeFilter={activeFilter}
+            onChange={setActiveFilter}
+          />
           <div className="toolbar">
+            <button
+              type="button"
+              className="icon-button queue-refresh"
+              aria-label="Refresh attention queue"
+              title="Refresh"
+              onClick={onRefresh}
+            >
+              ↻
+            </button>
+          </div>
+        </div>
+        {visibleThreads.length > 0 ? (
+          <div className="thread-list">
+            {visibleThreads.map((thread) => (
+              <TriageThreadRow
+                key={thread.externalThreadId}
+                thread={thread}
+                selected={false}
+                onOpenThread={onOpenThread}
+              />
+            ))}
+          </div>
+        ) : (
+          <EmptyState label={threads.length ? `No ${categoryLabel(activeFilter).toLowerCase()} threads.` : "No triage results loaded."} />
+        )}
+        <div className="queue-footer">
+          <label>
+            <span>Rows</span>
             <select value={maxResults} onChange={(event) => setMaxResults(Number(event.target.value))}>
               <option value={10}>10</option>
               <option value={20}>20</option>
               <option value={50}>50</option>
             </select>
-            <button type="button" className="secondary" disabled={!selectedThread} onClick={() => setFocusMode(true)}>
-              Focus
-            </button>
-            <button className="secondary" onClick={onRefresh}>Refresh</button>
-          </div>
+          </label>
         </div>
-        <form className="search-strip" onSubmit={onSearch}>
-          <input
-            value={searchQuery}
-            onChange={(event) => setSearchQuery(event.target.value)}
-            placeholder="Search conversations"
-          />
-          <button type="submit">Search</button>
-        </form>
-        <InboxFilterBar
-          filters={inboxFilters}
-          activeFilter={activeFilter}
-          onChange={setActiveFilter}
-        />
-        {visibleThreads.length > 0 ? (
-          <div className="triage-sections">
-            <TriageSection
-              title="Needs Action"
-              label="NEEDS_REPLY"
-              threads={visibleThreads}
-              selectedThread={selectedThread}
-              onOpenThread={onOpenThread}
-            />
-            <TriageSection
-              title="Security Review"
-              label="SECURITY_REVIEW"
-              threads={visibleThreads}
-              selectedThread={selectedThread}
-              onOpenThread={onOpenThread}
-            />
-            <TriageSection
-              title="Important"
-              label="IMPORTANT"
-              threads={visibleThreads}
-              selectedThread={selectedThread}
-              onOpenThread={onOpenThread}
-            />
-            <TriageSection
-              title="Waiting"
-              label="WAITING"
-              threads={visibleThreads}
-              selectedThread={selectedThread}
-              onOpenThread={onOpenThread}
-            />
-            <TriageSection
-              title="FYI"
-              label="FYI"
-              threads={visibleThreads}
-              selectedThread={selectedThread}
-              onOpenThread={onOpenThread}
-            />
-            <TriageSection
-              title="Low Priority"
-              label="LOW_PRIORITY"
-              threads={visibleThreads}
-              selectedThread={selectedThread}
-              onOpenThread={onOpenThread}
-              collapsed
-            />
-          </div>
-        ) : (
-          <EmptyState label={threads.length ? "No threads in this filter." : "No triage results loaded."} />
-        )}
       </section>
 
-      {threadWorkspace}
+      {selectedThread && threadWorkspace}
     </div>
   );
 }
@@ -1158,12 +1451,17 @@ function SearchView({
   setMaxResults,
   onSearch,
   onOpenThread,
+  onCloseThread,
   onCleanup,
   onUnsubscribe,
   onUpdateCategory,
   onUpdateWorkflowState,
   onTrustThreadSender,
-  onTrustThreadDomain
+  onTrustThreadDomain,
+  trackedMessageLinks,
+  trackingMessageId,
+  trackingResult,
+  onViewOpenSignals
 }) {
   const selectedSearchThread = result?.threads?.find(
     (thread) => thread.externalThreadId === selectedThread?.externalThreadId
@@ -1185,14 +1483,6 @@ function SearchView({
             </select>
           </div>
         </div>
-        <form className="search-strip prominent" onSubmit={onSearch}>
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search sender, subject, or Gmail query"
-          />
-          <button type="submit">Search</button>
-        </form>
         {result?.threads?.length > 0 ? (
           <div className="thread-list quiet">
             {result.threads.map((thread) => (
@@ -1219,6 +1509,11 @@ function SearchView({
         onUpdateWorkflowState={onUpdateWorkflowState}
         onTrustThreadSender={onTrustThreadSender}
         onTrustThreadDomain={onTrustThreadDomain}
+        trackedMessageLinks={trackedMessageLinks}
+        trackingMessageId={trackingMessageId}
+        trackingResult={trackingResult}
+        onViewOpenSignals={onViewOpenSignals}
+        onClose={onCloseThread}
       />
     </div>
   );
@@ -1233,7 +1528,13 @@ function ThreadWorkspace({
   onUpdateCategory,
   onUpdateWorkflowState,
   onTrustThreadSender,
-  onTrustThreadDomain
+  onTrustThreadDomain,
+  trackedMessageLinks,
+  trackingMessageId,
+  trackingResult,
+  onViewOpenSignals,
+  onClose,
+  showHeaderDate = true
 }) {
   if (!thread) {
     return (
@@ -1245,7 +1546,15 @@ function ThreadWorkspace({
 
   return (
     <section className="thread-workspace">
-      <ThreadReader thread={thread} />
+      <ThreadReader
+        thread={thread}
+        trackedMessageLinks={trackedMessageLinks}
+        trackingMessageId={trackingMessageId}
+        trackingResult={trackingResult}
+        onViewOpenSignals={onViewOpenSignals}
+        onClose={onClose}
+        showHeaderDate={showHeaderDate}
+      />
       <ThreadContextPanel
         thread={thread}
         triage={triage}
@@ -1261,20 +1570,48 @@ function ThreadWorkspace({
   );
 }
 
-function ThreadReader({ thread }) {
+function ThreadReader({
+  thread,
+  trackedMessageLinks = [],
+  trackingMessageId,
+  trackingResult,
+  onViewOpenSignals,
+  onClose,
+  showHeaderDate = true
+}) {
   return (
     <div className="reader">
       <div className="reader-header">
+        {onClose && (
+          <button
+            type="button"
+            className="thread-close-button"
+            aria-label="Close conversation"
+            title="Close conversation"
+            onClick={onClose}
+          >
+            ←
+          </button>
+        )}
         <div>
           <h2>{thread.subject || "(No subject)"}</h2>
           <div className="participants reader-participants">
             {formatParticipants(thread.participants)}
           </div>
         </div>
-        <span>{formatDate(thread.lastMessageAt)}</span>
+        <div className="reader-header-actions">
+          {showHeaderDate && <span>{formatDate(thread.lastMessageAt)}</span>}
+        </div>
       </div>
       <div className="message-stack">
-        {thread.messages?.map((message) => (
+        {thread.messages?.map((message) => {
+          const trackedLink = message.direction === "OUTBOUND"
+            ? trackedMessageLinks.find((link) => link.externalMessageId === message.externalMessageId)
+            : null;
+          const showTracking = trackedLink
+            && String(trackedLink.sentMessageId) === String(trackingMessageId)
+            && trackingResult;
+          return (
           <article className={`message-card ${message.direction?.toLowerCase()}`} key={message.externalMessageId}>
             <div className="message-meta">
               <div>
@@ -1298,8 +1635,29 @@ function ThreadReader({ thread }) {
                 ))}
               </div>
             )}
+            {trackedLink && (
+              <div className="message-open-signals">
+                <div>
+                  <strong>Open signals</strong>
+                  <span>Image-load activity for this sent message</span>
+                </div>
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => onViewOpenSignals(trackedLink.sentMessageId)}
+                >
+                  {showTracking ? "Refresh signals" : "View signals"}
+                </button>
+                {showTracking && (
+                  <div className="message-tracking-detail">
+                    <TrackingSummary tracking={trackingResult} />
+                  </div>
+                )}
+              </div>
+            )}
           </article>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
@@ -1327,6 +1685,7 @@ function ThreadContextPanel({
   const workflowState = context?.workflowState || "";
   const riskLevel = context?.phishingRiskLevel || "LOW";
   const displayWorkflow = workflowState || "ACTIVE";
+  const showWorkflowBadge = displayWorkflow && displayWorkflow !== "ACTIVE";
   const reasons = context?.reasons?.length
     ? context.reasons
     : triage?.reasons?.length
@@ -1337,23 +1696,28 @@ function ThreadContextPanel({
     <aside className="context-panel">
       <div className="context-hero">
         <div>
-          <span className={`status-chip ${workflowTone(displayWorkflow)}`}>
-            {workflowLabel(displayWorkflow)}
+          {showWorkflowBadge && (
+            <span className={`status-chip ${workflowTone(displayWorkflow)}`}>
+              {workflowLabel(displayWorkflow)}
+            </span>
+          )}
+          <strong>
+            {categoryLabel(category)}
+            {!context?.categoryOverride && " (Suggested)"}
+          </strong>
+          <span className={`label-pill ${labelTone(triage?.label)}`}>
+            {labelText(triage?.label || (thread.hasUnread ? "IMPORTANT" : "FYI"))}
           </span>
-          <strong>{categoryLabel(category)}</strong>
         </div>
-        <span className={`label-pill ${labelTone(triage?.label)}`}>
-          {labelText(triage?.label || (thread.hasUnread ? "IMPORTANT" : "FYI"))}
-        </span>
         {triage?.suggestedAction && <p>{triage.suggestedAction}</p>}
       </div>
-      <div className="context-section">
+      <div className="context-section info-section conversation-section">
         <h3>Conversation</h3>
         <strong>{primaryParticipant(thread.participants, latestMessage?.sender)}</strong>
         <span>{latestMessage?.sender || "Unknown sender"}</span>
       </div>
       {unsubscribe && (
-        <div className="context-section unsubscribe-section">
+        <div className="context-section unsubscribe-section mailing-list-section">
           <h3>Mailing list</h3>
           <strong>Unsubscribe available</strong>
           <span>
@@ -1370,7 +1734,7 @@ function ThreadContextPanel({
           </button>
         </div>
       )}
-      <div className="context-section">
+      <div className="context-section control-section">
         <h3>Control</h3>
         <label className="context-control">
           <span>Status</span>
@@ -1398,25 +1762,19 @@ function ThreadContextPanel({
             ))}
           </select>
         </label>
-        <div className="context-meta">
-          {context?.categoryOverride ? "Manual category" : `Suggested: ${categoryLabel(context?.suggestedCategory)}`}
-        </div>
       </div>
-      <div className="context-section">
-        <h3>Trust & Risk</h3>
-        <div className="risk-line">
-          <span className={`risk ${riskClass(riskLevel)}`}>{riskLevel}</span>
-          <span>{context ? `Risk score ${context.phishingScore}` : "Loading"}</span>
-        </div>
-        <div className="trust-state-grid">
-          <span className={context?.senderTrusted ? "trusted" : ""}>
-            {context?.senderTrusted ? "Sender trusted" : "Sender untrusted"}
+      <div className="context-section trust-risk-section">
+        <div className="section-heading-row">
+          <h3>Trust & Risk</h3>
+          <span className={`risk-score ${riskScoreClass(context?.phishingScore)}`}>
+            {context ? `Phishing risk ${context.phishingScore}/100 · ${riskScoreLabel(context.phishingScore)}` : "Loading"}
           </span>
-          <span className={context?.domainTrusted ? "trusted" : ""}>
-            {context?.domainTrusted ? "Domain trusted" : "Domain untrusted"}
-          </span>
-          {context?.screenerStatus && <span>Screener: {workflowLabel(context.screenerStatus)}</span>}
         </div>
+        {context?.screenerStatus && (
+          <div className="trust-state-grid">
+            <span>Screener: {workflowLabel(context.screenerStatus)}</span>
+          </div>
+        )}
         {context?.phishingSignals?.length > 0 && (
           <div className="context-list compact">
             {context.phishingSignals.slice(0, 3).map((signal) => (
@@ -1443,7 +1801,7 @@ function ThreadContextPanel({
           </button>
         </div>
       </div>
-      <div className="context-section">
+      <div className="context-section info-section surfaced-section">
         <h3>Why Surfaced</h3>
         <div className="context-list">
           {reasons.map((reason) => (
@@ -1451,7 +1809,7 @@ function ThreadContextPanel({
           ))}
         </div>
       </div>
-      <div className="context-section">
+      <div className="context-section info-section attachments-section">
         <h3>Attachments</h3>
         {attachments.length > 0 ? (
           <div className="context-list">
@@ -1531,44 +1889,17 @@ function TriageSection({ title, label, threads, selectedThread, onOpenThread, co
 }
 
 function TriageThreadRow({ thread, selected, onOpenThread }) {
-  const category = thread.category || thread.suggestedCategory;
-  const workflowState = thread.workflowState || "ACTIVE";
-  const trusted = thread.senderTrusted || thread.domainTrusted;
-  const riskLevel = thread.phishingRiskLevel;
-
   return (
     <button
-      className={`thread-row triage-row ${selected ? "selected" : ""}`}
+      className={`thread-row triage-row ${thread.hasUnread ? "unread" : ""} ${selected ? "selected" : ""}`}
       onClick={() => onOpenThread(thread.externalThreadId)}
     >
-      <div className={thread.hasUnread ? "unread-dot active" : "unread-dot"} />
       <div className="thread-main">
         <div className="thread-title">
           <strong>{primaryParticipant(thread.participants)}</strong>
           <span>{formatDate(thread.lastMessageAt)}</span>
         </div>
         <div className="thread-subject">{thread.subject || "(No subject)"}</div>
-        {thread.suggestedAction && <div className="thread-suggestion">{thread.suggestedAction}</div>}
-        <div className="thread-footer">
-          {thread.label && <span className={`label-pill ${labelTone(thread.label)}`}>{labelText(thread.label)}</span>}
-          {category && (
-            <span className={`status-chip ${categoryTone(category)}`}>
-              {categoryLabel(category)}{thread.categoryOverride ? " · manual" : ""}
-            </span>
-          )}
-          {workflowState !== "ACTIVE" && (
-            <span className={`status-chip ${workflowTone(workflowState)}`}>
-              {workflowLabel(workflowState)}
-            </span>
-          )}
-          {trusted && <span className="score-pill">Trusted</span>}
-          {riskLevel && riskLevel !== "LOW" && (
-            <span className={`status-chip ${riskTone(riskLevel)}`}>
-              {riskLevel} risk
-            </span>
-          )}
-          {thread.attentionScore != null && <span className="score-pill">Score {thread.attentionScore}</span>}
-        </div>
       </div>
     </button>
   );
@@ -1590,8 +1921,11 @@ function ComposeView({
   setFile,
   templates,
   drafts,
+  groups = [],
   activeDraftId,
   draftStatus,
+  draftReturnAvailable,
+  templateReturnTarget,
   scheduleAt,
   setScheduleAt,
   lastSend,
@@ -1601,28 +1935,69 @@ function ComposeView({
   onLoadDraft,
   onDeleteDraft,
   onApplyTemplate,
+  onSeeAllTemplates,
+  onSeeAllDrafts,
+  onBackToDrafts,
+  onBackToTemplates,
+  trackingMessageId,
+  trackingResult,
   onViewOpenSignals
 }) {
+  const showBackButton = draftReturnAvailable || templateReturnTarget;
+
   return (
     <div className="compose-workspace">
       <section className="compose-editor">
-        <div className="compose-header">
+        <div className={`compose-header ${showBackButton ? "with-back" : ""}`}>
+          {showBackButton && (
+            <button
+              type="button"
+              className="thread-close-button"
+              aria-label={draftReturnAvailable ? "Back to drafts" : "Back to templates"}
+              title={draftReturnAvailable ? "Back to drafts" : "Back to templates"}
+              onClick={draftReturnAvailable ? onBackToDrafts : onBackToTemplates}
+            >
+              ←
+            </button>
+          )}
           <div>
             <h2>Compose</h2>
             <p className="subtle">{draftStatus || `${wordCount(form.body)} words`}</p>
           </div>
           <div className="compose-header-actions">
             {activeDraftId && <span className="draft-chip">Draft #{activeDraftId}</span>}
-            <button type="button" onClick={onSaveDraft}>Save draft</button>
           </div>
         </div>
         <form className="compose-form" onSubmit={onSend}>
           <Field label="Recipients">
-            <input
-              value={form.recipients}
-              onChange={(event) => setForm({ ...form, recipients: event.target.value })}
-              placeholder="one@example.com, two@example.com"
-            />
+            <div className="recipient-control">
+              <input
+                value={form.recipients}
+                onChange={(event) => setForm({ ...form, recipients: event.target.value })}
+                placeholder="one@example.com, two@example.com"
+              />
+              {groups.length > 0 && (
+                <select
+                  aria-label="Choose recipient group"
+                  value=""
+                  onChange={(event) => {
+                    const group = groups.find((item) => String(item.id) === event.target.value);
+                    if (!group) {
+                      return;
+                    }
+                    setForm({
+                      ...form,
+                      recipients: (group.members || []).join(", ")
+                    });
+                  }}
+                >
+                  <option value="">Groups</option>
+                  {groups.map((group) => (
+                    <option value={group.id} key={group.id}>{group.name}</option>
+                  ))}
+                </select>
+              )}
+            </div>
           </Field>
           <Field label="Subject">
             <input value={form.subject} onChange={(event) => setForm({ ...form, subject: event.target.value })} />
@@ -1647,20 +2022,27 @@ function ComposeView({
         <DeliveryPanel
           form={form}
           setForm={setForm}
-          file={file}
-          setFile={setFile}
           scheduleAt={scheduleAt}
           setScheduleAt={setScheduleAt}
           lastSend={lastSend}
+          trackingMessageId={trackingMessageId}
+          trackingResult={trackingResult}
           onViewOpenSignals={onViewOpenSignals}
         />
-        <TemplatePicker templates={templates} onApplyTemplate={onApplyTemplate} />
-        <DraftShelf
-          drafts={drafts}
-          activeDraftId={activeDraftId}
-          onLoadDraft={onLoadDraft}
-          onDeleteDraft={onDeleteDraft}
-        />
+        <AttachmentPanel file={file} setFile={setFile} />
+        <div className="compose-library-row">
+          <TemplatePicker
+            templates={templates}
+            onApplyTemplate={onApplyTemplate}
+            onSeeAllTemplates={onSeeAllTemplates}
+          />
+          <DraftShelf
+            drafts={drafts}
+            activeDraftId={activeDraftId}
+            onLoadDraft={onLoadDraft}
+            onSeeAllDrafts={onSeeAllDrafts}
+          />
+        </div>
       </aside>
     </div>
   );
@@ -1689,11 +2071,11 @@ function GuidancePanel({ form, file }) {
 function DeliveryPanel({
   form,
   setForm,
-  file,
-  setFile,
   scheduleAt,
   setScheduleAt,
   lastSend,
+  trackingMessageId,
+  trackingResult,
   onViewOpenSignals
 }) {
   return (
@@ -1717,11 +2099,6 @@ function DeliveryPanel({
           />
           <span>Track open signals for messages sent now</span>
         </label>
-        <p className="subtle">Scheduled messages currently do not include open-signal tracking.</p>
-        <Field label="Attachment">
-          <input type="file" onChange={(event) => setFile(event.target.files?.[0] || null)} />
-        </Field>
-        {file && <p className="subtle">{file.name}</p>}
         {lastSend && (
           <div className="result-box">
             <strong>{lastSend.scheduled ? "Scheduled" : "Last sent"}</strong>
@@ -1732,6 +2109,9 @@ function DeliveryPanel({
                 <button type="button" onClick={() => onViewOpenSignals(lastSend.id)}>
                   View open signals
                 </button>
+                {String(lastSend.id) === String(trackingMessageId) && trackingResult && (
+                  <TrackingSummary tracking={trackingResult} />
+                )}
               </>
             )}
           </div>
@@ -1741,7 +2121,23 @@ function DeliveryPanel({
   );
 }
 
-function TemplatePicker({ templates, onApplyTemplate }) {
+function AttachmentPanel({ file, setFile }) {
+  return (
+    <section className="support-panel attachment-panel">
+      <div className="support-heading">
+        <h2>Attachments</h2>
+      </div>
+      <div className="stack">
+        <Field label="File">
+          <input type="file" onChange={(event) => setFile(event.target.files?.[0] || null)} />
+        </Field>
+        {file && <p className="subtle">{file.name}</p>}
+      </div>
+    </section>
+  );
+}
+
+function TemplatePicker({ templates, onApplyTemplate, onSeeAllTemplates }) {
   return (
     <section className="support-panel">
       <div className="support-heading">
@@ -1749,7 +2145,7 @@ function TemplatePicker({ templates, onApplyTemplate }) {
       </div>
       {templates.length > 0 ? (
         <div className="asset-list">
-          {templates.slice(0, 5).map((template) => (
+          {templates.slice(0, 2).map((template) => (
             <button
               className="asset-row"
               type="button"
@@ -1760,6 +2156,12 @@ function TemplatePicker({ templates, onApplyTemplate }) {
               <span>{template.subject}</span>
             </button>
           ))}
+          {templates.length > 2 && (
+            <button className="see-all-row" type="button" onClick={onSeeAllTemplates}>
+              <span>See all templates</span>
+              <strong>→</strong>
+            </button>
+          )}
         </div>
       ) : (
         <EmptyState label="No templates yet." small />
@@ -1768,7 +2170,7 @@ function TemplatePicker({ templates, onApplyTemplate }) {
   );
 }
 
-function DraftShelf({ drafts, activeDraftId, onLoadDraft, onDeleteDraft }) {
+function DraftShelf({ drafts, activeDraftId, onLoadDraft, onSeeAllDrafts }) {
   return (
     <section className="support-panel">
       <div className="support-heading">
@@ -1776,7 +2178,7 @@ function DraftShelf({ drafts, activeDraftId, onLoadDraft, onDeleteDraft }) {
       </div>
       {drafts.length > 0 ? (
         <div className="asset-list">
-          {drafts.slice(0, 5).map((draft) => (
+          {drafts.slice(0, 2).map((draft) => (
             <div
               className={`asset-row draft-row ${activeDraftId === draft.id ? "active" : ""}`}
               key={draft.id}
@@ -1785,11 +2187,14 @@ function DraftShelf({ drafts, activeDraftId, onLoadDraft, onDeleteDraft }) {
                 <strong>{draft.subject || "(No subject)"}</strong>
                 <span>{formatDate(draft.updatedAt)}</span>
               </button>
-              <button className="icon-action danger" type="button" onClick={() => onDeleteDraft(draft.id)}>
-                Delete
-              </button>
             </div>
           ))}
+          {drafts.length > 2 && (
+            <button className="see-all-row" type="button" onClick={onSeeAllDrafts}>
+              <span>See all drafts</span>
+              <strong>→</strong>
+            </button>
+          )}
         </div>
       ) : (
         <EmptyState label="No drafts saved." small />
@@ -1798,36 +2203,89 @@ function DraftShelf({ drafts, activeDraftId, onLoadDraft, onDeleteDraft }) {
   );
 }
 
-function DraftsView({ drafts, onRefresh, onLoadDraft, onDeleteDraft }) {
+function DraftsView({
+  drafts,
+  onRefresh,
+  onLoadDraft,
+  onDeleteDraft,
+  scheduledMessages,
+  onRefreshScheduled,
+  onCancelScheduled,
+  onDeleteScheduled,
+  onLoadScheduled,
+  onBackToCompose
+}) {
   return (
-    <section className="panel">
-      <div className="panel-heading">
-        <div>
-          <h2>Drafts</h2>
-          <p className="subtle">Local compose drafts.</p>
+    <div className="drafts-scheduled-workspace">
+      <section className="panel drafts-panel">
+        <div className="panel-heading">
+          {onBackToCompose && (
+            <button
+              type="button"
+              className="thread-close-button"
+              aria-label="Back to compose"
+              title="Back to compose"
+              onClick={onBackToCompose}
+            >
+              ←
+            </button>
+          )}
+          <div>
+            <h2>Drafts</h2>
+            <p className="subtle">Local compose drafts.</p>
+          </div>
+          <button className="secondary" onClick={onRefresh}>Refresh</button>
         </div>
-        <button className="secondary" onClick={onRefresh}>Refresh</button>
-      </div>
-      {drafts.length > 0 ? (
-        <div className="table-list">
-          {drafts.map((draft) => (
-            <div className="table-row" key={draft.id}>
-              <div>
-                <strong>{draft.subject || "(No subject)"}</strong>
-                <span>{(draft.recipients || []).join(", ") || "No recipients"}</span>
-                <span>Updated {formatDate(draft.updatedAt)}</span>
+        {drafts.length > 0 ? (
+          <div className="table-list drafts-table">
+            {drafts.map((draft) => (
+              <div
+                className="table-row"
+                key={draft.id}
+                role="button"
+                tabIndex={0}
+                onClick={() => onLoadDraft(draft)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    onLoadDraft(draft);
+                  }
+                }}
+              >
+                <div>
+                  <strong>{draft.subject || "(No subject)"}</strong>
+                  <span>{(draft.recipients || []).join(", ") || "No recipients"}</span>
+                  <span>Updated {formatDate(draft.updatedAt)}</span>
+                </div>
+                <div className="actions">
+                  <button
+                    className="icon-action danger"
+                    type="button"
+                    aria-label="Delete draft"
+                    title="Delete draft"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onDeleteDraft(draft.id);
+                    }}
+                  >
+                    🗑
+                  </button>
+                </div>
               </div>
-              <div className="actions">
-                <button onClick={() => onLoadDraft(draft)}>Open</button>
-                <button className="danger" onClick={() => onDeleteDraft(draft.id)}>Delete</button>
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <EmptyState label="No drafts saved." />
-      )}
-    </section>
+            ))}
+          </div>
+        ) : (
+          <EmptyState label="No drafts saved." />
+        )}
+      </section>
+      <ScheduledView
+        messages={scheduledMessages}
+        onRefresh={onRefreshScheduled}
+        onCancel={onCancelScheduled}
+        onDelete={onDeleteScheduled}
+        onSelect={onLoadScheduled}
+      />
+    </div>
   );
 }
 
@@ -1854,6 +2312,7 @@ function ManageView({
   scheduledMessages,
   onRefreshScheduled,
   onCancelScheduled,
+  onDeleteScheduled,
   screenerForm,
   setScreenerForm,
   evaluation,
@@ -1879,10 +2338,9 @@ function ManageView({
 }) {
   const tabs = [
     ["scheduled", "Scheduled", scheduledMessages.length],
-    ["templates", "Templates", templates.length],
-    ["contacts", "Contacts", groups.length],
-    ["screener", "Screener", pending.length],
-    ["signals", "Signals", (trust.senders?.length || 0) + (trust.domains?.length || 0)]
+    ["templates", "Templates & Groups", templates.length + groups.length],
+    ["screener", "Screener & Trust", pending.length + (trust.senders?.length || 0) + (trust.domains?.length || 0)],
+    ["signals", "Signals", trackedMessages.length]
   ];
 
   return (
@@ -1896,9 +2354,8 @@ function ManageView({
         </div>
         <div className="manage-metrics">
           <ManageMetric label="Scheduled" value={scheduledMessages.length} />
-          <ManageMetric label="Templates" value={templates.length} />
-          <ManageMetric label="Contacts" value={groups.length} />
-          <ManageMetric label="Screener" value={pending.length} tone={pending.length > 0 ? "amber" : ""} />
+          <ManageMetric label="Templates & Groups" value={templates.length + groups.length} />
+          <ManageMetric label="Screener & Trust" value={pending.length + (trust.senders?.length || 0) + (trust.domains?.length || 0)} tone={pending.length > 0 ? "amber" : ""} />
         </div>
         <div className="manage-tabs">
           {tabs.map(([key, label, count]) => (
@@ -1920,35 +2377,28 @@ function ManageView({
             messages={scheduledMessages}
             onRefresh={onRefreshScheduled}
             onCancel={onCancelScheduled}
+            onDelete={onDeleteScheduled}
           />
         )}
-        {activeTab === "templates" && (
-          <TemplatesView
-            templates={templates}
-            form={templateForm}
-            setForm={setTemplateForm}
-            onCreate={onCreateTemplate}
-            onDelete={onDeleteTemplate}
-            onUse={onUseTemplate}
-            onRefresh={onRefreshTemplates}
-          />
-        )}
-        {activeTab === "contacts" && (
-          <GroupsView
+        {(activeTab === "templates" || activeTab === "contacts") && (
+          <TemplatesGroupsView
+            templates={visibleTemplates}
+            templateForm={templateForm}
+            setTemplateForm={setTemplateForm}
+            onCreateTemplate={onCreateTemplate}
+            onDeleteTemplate={onDeleteTemplate}
+            onUseTemplate={onUseTemplate}
+            onRefreshTemplates={onRefreshTemplates}
             groups={groups}
-            form={groupForm}
-            setForm={setGroupForm}
-            bulkForm={bulkForm}
-            setBulkForm={setBulkForm}
-            bulkResult={bulkResult}
-            onCreate={onCreateGroup}
-            onDelete={onDeleteGroup}
-            onBulkSend={onBulkSend}
-            onRefresh={onRefreshGroups}
+            groupForm={groupForm}
+            setGroupForm={setGroupForm}
+            onCreateGroup={onCreateGroup}
+            onDeleteGroup={onDeleteGroup}
+            onRefreshGroups={onRefreshGroups}
           />
         )}
         {activeTab === "screener" && (
-          <ScreenerView
+          <ScreenerTrustView
             form={screenerForm}
             setForm={setScreenerForm}
             evaluation={evaluation}
@@ -1958,6 +2408,10 @@ function ManageView({
             onApproveSender={onApproveSender}
             onApproveDomain={onApproveDomain}
             onReject={onRejectSender}
+            trust={trust}
+            onRefreshTrust={onRefreshTrust}
+            onTrustSender={onTrustSender}
+            onTrustDomain={onTrustDomain}
           />
         )}
         {activeTab === "signals" && (
@@ -1975,12 +2429,6 @@ function ManageView({
               result={phishingResult}
               onAnalyze={onAnalyzePhishing}
             />
-            <TrustView
-              trust={trust}
-              onRefresh={onRefreshTrust}
-              onTrustSender={onTrustSender}
-              onTrustDomain={onTrustDomain}
-            />
           </div>
         )}
       </section>
@@ -1997,46 +2445,106 @@ function ManageMetric({ label, value, tone = "" }) {
   );
 }
 
-function TemplatesView({ templates, form, setForm, onCreate, onDelete, onUse, onRefresh }) {
+function TemplatesGroupsView({
+  templates,
+  templateForm,
+  setTemplateForm,
+  onCreateTemplate,
+  onDeleteTemplate,
+  onUseTemplate,
+  onRefreshTemplates,
+  groups,
+  groupForm,
+  setGroupForm,
+  onCreateGroup,
+  onDeleteGroup,
+  onRefreshGroups,
+  onBackToCompose
+}) {
   return (
-    <div className="content-grid">
-      <section className="panel">
+    <div className="templates-groups-workspace">
+      <TemplatesView
+        templates={templates}
+        form={templateForm}
+        setForm={setTemplateForm}
+        onCreate={onCreateTemplate}
+        onDelete={onDeleteTemplate}
+        onUse={onUseTemplate}
+        onRefresh={onRefreshTemplates}
+        onBackToCompose={onBackToCompose}
+      />
+      <GroupsView
+        groups={groups}
+        form={groupForm}
+        setForm={setGroupForm}
+        onCreate={onCreateGroup}
+        onDelete={onDeleteGroup}
+        onRefresh={onRefreshGroups}
+      />
+    </div>
+  );
+}
+
+function TemplatesView({ templates, form, setForm, onCreate, onDelete, onUse, onRefresh, onBackToCompose }) {
+  const [creatingTemplate, setCreatingTemplate] = useState(false);
+  const [activeCategory, setActiveCategory] = useState("All");
+  const [creatingCategory, setCreatingCategory] = useState(false);
+  const categories = ["All", ...Array.from(new Set(templates.map((template) => template.category || "General")))];
+  const templateCategories = categories.filter((category) => category !== "All");
+  const visibleTemplates = activeCategory === "All"
+    ? templates
+    : templates.filter((template) => (template.category || "General") === activeCategory);
+
+  return (
+    <div className="content-grid asset-workspace templates-workspace">
+      <section className="panel asset-list-panel">
         <div className="panel-heading">
+          {onBackToCompose && (
+            <button
+              type="button"
+              className="thread-close-button"
+              aria-label="Back to compose"
+              title="Back to compose"
+              onClick={onBackToCompose}
+            >
+              ←
+            </button>
+          )}
           <div>
-            <h2>Create Template</h2>
-            <p className="subtle">Reusable message asset.</p>
+            <h2>Templates</h2>
+            <p className="subtle">Reusable replies and message patterns.</p>
+          </div>
+          <div className="actions">
+            {templates.length > 0 && (
+              <div className="template-filter-control">
+                <select value={activeCategory} onChange={(event) => setActiveCategory(event.target.value)}>
+                  {categories.map((category) => (
+                    <option value={category} key={category}>{category}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+            <button
+              className="primary"
+              type="button"
+              onClick={() => {
+                setCreatingCategory(false);
+                setCreatingTemplate(true);
+              }}
+            >
+              Create template
+            </button>
           </div>
         </div>
-        <form className="stack" onSubmit={onCreate}>
-          <Field label="Name">
-            <input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
-          </Field>
-          <Field label="Category">
-            <input value={form.category} onChange={(event) => setForm({ ...form, category: event.target.value })} />
-          </Field>
-          <Field label="Subject">
-            <input value={form.subject} onChange={(event) => setForm({ ...form, subject: event.target.value })} />
-          </Field>
-          <Field label="Body">
-            <textarea value={form.body} onChange={(event) => setForm({ ...form, body: event.target.value })} />
-          </Field>
-          <button className="primary" type="submit">Save template</button>
-        </form>
-      </section>
-
-      <section className="panel">
-        <div className="panel-heading">
-          <h2>Templates</h2>
-          <button className="secondary" onClick={onRefresh}>Refresh</button>
-        </div>
         {templates.length > 0 ? (
+          <>
           <div className="asset-card-grid">
-            {templates.map((template) => (
+            {visibleTemplates.map((template) => (
               <article className="asset-card template-card" key={template.id}>
                 <div className="asset-card-main">
                   <div className="asset-card-title">
                     <strong>{template.name}</strong>
-                    <span>{template.category || "General"}</span>
+                    <span>{template.builtIn ? "Starter" : template.category || "General"}</span>
                   </div>
                   <span className="asset-subject">{template.subject || "(No subject)"}</span>
                   <p>{previewText(template.body, 150)}</p>
@@ -2047,15 +2555,97 @@ function TemplatesView({ templates, form, setForm, onCreate, onDelete, onUse, on
                 </div>
                 <div className="actions">
                   <button className="primary" onClick={() => onUse(template)}>Use</button>
-                  <button className="danger" onClick={() => onDelete(template.id)}>Delete</button>
+                  {!template.builtIn && (
+                    <button className="danger" onClick={() => onDelete(template.id)}>Delete</button>
+                  )}
                 </div>
               </article>
             ))}
           </div>
+          </>
         ) : (
           <EmptyState label="No templates yet." />
         )}
       </section>
+      {creatingTemplate && (
+        <div className="modal-backdrop" role="presentation" onMouseDown={() => setCreatingTemplate(false)}>
+          <section
+            className="template-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="create-template-title"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <div className="modal-heading">
+              <div>
+                <h2 id="create-template-title">Create Template</h2>
+                <p className="subtle">Save a reusable email pattern.</p>
+              </div>
+              <button
+                type="button"
+                className="thread-close-button"
+                aria-label="Close create template"
+                onClick={() => setCreatingTemplate(false)}
+              >
+                ×
+              </button>
+            </div>
+            <form
+              className="template-modal-form"
+              onSubmit={async (event) => {
+                await onCreate(event);
+                setCreatingTemplate(false);
+              }}
+            >
+              <div className="template-modal-fields">
+                <Field label="Name">
+                  <input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
+                </Field>
+                <Field label="Category">
+                  <select
+                    value={creatingCategory ? "__new__" : form.category}
+                    onChange={(event) => {
+                      if (event.target.value === "__new__") {
+                        setCreatingCategory(true);
+                        setForm({ ...form, category: "" });
+                        return;
+                      }
+                      setCreatingCategory(false);
+                      setForm({ ...form, category: event.target.value });
+                    }}
+                  >
+                    {templateCategories.map((category) => (
+                      <option value={category} key={category}>{category}</option>
+                    ))}
+                    <option value="__new__">New category…</option>
+                  </select>
+                </Field>
+                {creatingCategory && (
+                  <Field label="New Category">
+                    <input
+                      value={form.category}
+                      onChange={(event) => setForm({ ...form, category: event.target.value })}
+                      placeholder="e.g. Support"
+                    />
+                  </Field>
+                )}
+                <Field label="Subject">
+                  <input value={form.subject} onChange={(event) => setForm({ ...form, subject: event.target.value })} />
+                </Field>
+              </div>
+              <Field label="Body">
+                <textarea value={form.body} onChange={(event) => setForm({ ...form, body: event.target.value })} />
+              </Field>
+              <div className="modal-actions">
+                <button type="button" className="secondary" onClick={() => setCreatingTemplate(false)}>
+                  Cancel
+                </button>
+                <button className="primary" type="submit">Save template</button>
+              </div>
+            </form>
+          </section>
+        </div>
+      )}
     </div>
   );
 }
@@ -2064,58 +2654,30 @@ function GroupsView({
   groups,
   form,
   setForm,
-  bulkForm,
-  setBulkForm,
-  bulkResult,
   onCreate,
   onDelete,
-  onBulkSend,
   onRefresh
 }) {
-  function toggleGroup(id) {
-    const selected = bulkForm.selectedGroupIds.includes(id);
-    setBulkForm({
-      ...bulkForm,
-      selectedGroupIds: selected
-        ? bulkForm.selectedGroupIds.filter((item) => item !== id)
-        : [...bulkForm.selectedGroupIds, id],
-      confirmed: false
-    });
-  }
+  const [creatingGroup, setCreatingGroup] = useState(false);
 
   return (
-    <div className="content-grid">
-      <section className="panel">
+    <div className="content-grid asset-workspace groups-workspace">
+      <section className="panel asset-list-panel groups-panel">
         <div className="panel-heading">
           <div>
-            <h2>Create Group</h2>
-            <p className="subtle">Recipient relationship set.</p>
+            <h2>Groups</h2>
+            <p className="subtle">Recipient relationship sets.</p>
+          </div>
+          <div className="actions">
+            <button className="primary" type="button" onClick={() => setCreatingGroup(true)}>
+              Create group
+            </button>
           </div>
         </div>
-        <form className="stack" onSubmit={onCreate}>
-          <Field label="Name">
-            <input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
-          </Field>
-          <Field label="Members">
-            <textarea
-              value={form.members}
-              onChange={(event) => setForm({ ...form, members: event.target.value })}
-              placeholder="one@example.com, two@example.com"
-            />
-          </Field>
-          <button className="primary" type="submit">Save group</button>
-        </form>
-      </section>
-
-      <section className="panel">
-        <div className="panel-heading">
-          <h2>Groups</h2>
-          <button className="secondary" onClick={onRefresh}>Refresh</button>
-        </div>
         {groups.length > 0 ? (
-          <div className="asset-card-grid">
+          <div className="joined-list-card">
             {groups.map((group) => (
-              <article className="asset-card contact-card" key={group.id}>
+              <article className="joined-list-row contact-card" key={group.id}>
                 <div className="asset-card-main">
                   <strong>{group.name}</strong>
                   <span className="asset-subject">{group.memberCount} members</span>
@@ -2131,102 +2693,157 @@ function GroupsView({
           <EmptyState label="No recipient groups yet." />
         )}
       </section>
-
-      <section className="panel wide">
-        <div className="panel-heading">
-          <h2>Bulk Send</h2>
-        </div>
-        <form className="bulk-grid" onSubmit={onBulkSend}>
-          <div className="stack">
-            {groups.map((group) => (
-              <label className="check-row" key={group.id}>
-                <input
-                  type="checkbox"
-                  checked={bulkForm.selectedGroupIds.includes(group.id)}
-                  onChange={() => toggleGroup(group.id)}
-                />
-                <span>{group.name} ({group.memberCount})</span>
-              </label>
-            ))}
-          </div>
-          <div className="stack">
-            <Field label="Subject">
-              <input
-                value={bulkForm.subject}
-                onChange={(event) => setBulkForm({
-                  ...bulkForm,
-                  subject: event.target.value,
-                  confirmed: false
-                })}
-              />
-            </Field>
-            <Field label="Body">
-              <textarea
-                value={bulkForm.body}
-                onChange={(event) => setBulkForm({
-                  ...bulkForm,
-                  body: event.target.value,
-                  confirmed: false
-                })}
-              />
-            </Field>
-            <label className="check-row">
-              <input
-                type="checkbox"
-                checked={bulkForm.confirmed}
-                onChange={(event) => setBulkForm({
-                  ...bulkForm,
-                  confirmed: event.target.checked
-                })}
-              />
-              <span>I confirm this private send to the selected groups.</span>
-            </label>
-            <button
-              className="primary"
-              type="submit"
-              disabled={!bulkForm.confirmed || bulkForm.selectedGroupIds.length === 0}
+      {creatingGroup && (
+        <div className="modal-backdrop" role="presentation" onMouseDown={() => setCreatingGroup(false)}>
+          <section
+            className="template-modal group-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="create-group-title"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <div className="modal-heading">
+              <div>
+                <h2 id="create-group-title">Create Group</h2>
+                <p className="subtle">Save a reusable recipient set.</p>
+              </div>
+              <button
+                type="button"
+                className="thread-close-button"
+                aria-label="Close create group"
+                onClick={() => setCreatingGroup(false)}
+              >
+                ×
+              </button>
+            </div>
+            <form
+              className="template-modal-form group-modal-form"
+              onSubmit={async (event) => {
+                await onCreate(event);
+                setCreatingGroup(false);
+              }}
             >
-              Send private bulk messages
-            </button>
-          </div>
-        </form>
-        {bulkResult && (
-          <div className="result-box">
-            <strong>{bulkResult.sentCount} sent, {bulkResult.failedCount} failed</strong>
-            <span>Total recipients: {bulkResult.totalRecipients}</span>
-          </div>
-        )}
-      </section>
+              <Field label="Name">
+                <input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
+              </Field>
+              <Field label="Members">
+                <textarea
+                  value={form.members}
+                  onChange={(event) => setForm({ ...form, members: event.target.value })}
+                  placeholder="one@example.com, two@example.com"
+                />
+              </Field>
+              <div className="modal-actions">
+                <button type="button" className="secondary" onClick={() => setCreatingGroup(false)}>
+                  Cancel
+                </button>
+                <button className="primary" type="submit">Save group</button>
+              </div>
+            </form>
+          </section>
+        </div>
+      )}
     </div>
   );
 }
 
-function ScheduledView({ messages, onRefresh, onCancel }) {
+function ContactsTrustView({
+  groups,
+  form,
+  setForm,
+  bulkForm,
+  setBulkForm,
+  bulkResult,
+  onCreate,
+  onDelete,
+  onBulkSend,
+  onRefresh,
+  trust,
+  onRefreshTrust,
+  onTrustSender,
+  onTrustDomain
+}) {
   return (
-    <section className="panel">
+    <div className="contacts-trust-workspace">
+      <GroupsView
+        groups={groups}
+        form={form}
+        setForm={setForm}
+        bulkForm={bulkForm}
+        setBulkForm={setBulkForm}
+        bulkResult={bulkResult}
+        onCreate={onCreate}
+        onDelete={onDelete}
+        onBulkSend={onBulkSend}
+        onRefresh={onRefresh}
+      />
+      <TrustView
+        trust={trust}
+        onRefresh={onRefreshTrust}
+        onTrustSender={onTrustSender}
+        onTrustDomain={onTrustDomain}
+      />
+    </div>
+  );
+}
+
+function ScheduledView({ messages, onRefresh, onCancel, onDelete, onSelect }) {
+  return (
+    <section className="panel scheduled-panel">
       <div className="panel-heading">
         <h2>Scheduled Messages</h2>
         <button className="secondary" onClick={onRefresh}>Refresh</button>
       </div>
       {messages.length > 0 ? (
-        <div className="table-list">
+        <div className="table-list scheduled-list">
           {messages.map((message) => (
-            <div className="table-row" key={message.id}>
-              <div>
-                <strong>{message.subject}</strong>
-                <span>{message.recipients?.join(", ")}</span>
-                <span>
-                  <span className={`status-chip inline ${statusTone(message.status)}`}>
-                    {workflowLabel(message.status)}
-                  </span>
-                  {formatDate(message.scheduledFor)}
-                </span>
-                {message.failureReason && <span>{message.failureReason}</span>}
+            <div
+              className="table-row scheduled-row"
+              key={message.id}
+              role="button"
+              tabIndex={0}
+              onClick={() => onSelect?.(message)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  onSelect?.(message);
+                }
+              }}
+            >
+              <div className="scheduled-row-main">
+                <strong>{message.subject || "(No subject)"}</strong>
+                <span>{(message.recipients || []).join(", ") || "No recipients"}</span>
+                {message.failureReason && <span className="scheduled-error">{message.failureReason}</span>}
               </div>
-              <div className="actions">
-                {message.status === "PENDING" && (
-                  <button className="danger" onClick={() => onCancel(message.id)}>Cancel</button>
+              <div className="scheduled-row-side">
+                <span className={`status-chip inline ${statusTone(message.status)}`}>
+                  {workflowLabel(message.status)}
+                </span>
+                <span>{formatDate(message.scheduledFor)}</span>
+                {String(message.status || "").toUpperCase() === "PENDING" && (
+                  <button
+                    className="danger"
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onCancel(message.id);
+                    }}
+                  >
+                    Cancel
+                  </button>
                 )}
+                <button
+                  className="icon-action danger"
+                  type="button"
+                  aria-label="Delete scheduled message"
+                  title="Delete scheduled message"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onDelete(message.id);
+                  }}
+                >
+                  🗑
+                </button>
               </div>
             </div>
           ))}
@@ -2239,32 +2856,35 @@ function ScheduledView({ messages, onRefresh, onCancel }) {
 }
 
 function TrackingView({ messages, selectedMessageId, result, onSelect, onRefresh }) {
+  const selectedMessage = messages.find((message) => String(message.sentMessageId) === String(selectedMessageId));
+
   return (
-    <div className="content-grid">
+    <div className="content-grid tracking-workspace">
       <section className="panel">
         <div className="panel-heading">
           <div>
-            <h2>Open Signals</h2>
-            <p className="subtle">Recent tracked messages and their image-load signals.</p>
+            <h2>Sent Emails</h2>
+            <p className="subtle">Recent sent messages with open-signal tracking.</p>
           </div>
           <button className="secondary" type="button" onClick={onRefresh}>Refresh</button>
         </div>
         {messages.length > 0 ? (
-          <div className="asset-list">
+          <div className="asset-list tracking-list">
             {messages.map((message) => (
               <button
-                className={`asset-row tracking-message-row ${
+                className={`thread-row triage-row tracking-message-row ${
                   String(message.sentMessageId) === String(selectedMessageId) ? "active" : ""
                 }`}
                 type="button"
                 key={message.sentMessageId}
                 onClick={() => onSelect(message.sentMessageId)}
               >
-                <strong>{message.subject || "(No subject)"}</strong>
-                <span>{message.recipient || "No recipient"}</span>
-                <span>
-                  {trackingStatusLabel(message.status)} · {message.pixelLoadCount} {message.pixelLoadCount === 1 ? "signal" : "signals"} · {formatDate(message.sentAt)}
-                </span>
+                <div className="thread-main">
+                  <div className="thread-title">
+                    <strong>{message.recipient || "No recipient"}</strong>
+                  </div>
+                  <div className="thread-subject">{message.subject || "(No subject)"}</div>
+                </div>
               </button>
             ))}
           </div>
@@ -2274,15 +2894,84 @@ function TrackingView({ messages, selectedMessageId, result, onSelect, onRefresh
       </section>
       <section className="panel">
         <div className="panel-heading">
-          <h2>Signal State</h2>
+          <div>
+            <h2>Email Signals</h2>
+            <p className="subtle">Open-tracking status for the selected sent email.</p>
+          </div>
         </div>
-        {result ? <TrackingSummary tracking={result} /> : <EmptyState label="No open signals loaded." />}
+        {result ? (
+          <TrackingSummary tracking={result} message={selectedMessage} variant="text" />
+        ) : (
+          <EmptyState label="No open signals loaded." />
+        )}
       </section>
     </div>
   );
 }
 
-function TrackingSummary({ tracking }) {
+function TrackingSummary({ tracking, message, variant = "cards" }) {
+  if (variant === "text") {
+    const opened = tracking.status === "IMAGE_LOAD_DETECTED" || tracking.pixelLoadCount > 0;
+    const insight = !tracking.enabled
+      ? "Open tracking is off for this email."
+      : opened
+        ? "This email has loaded the tracking image at least once."
+        : "No tracking image load has been seen yet.";
+    const rows = [
+      ["Tracking", tracking.enabled ? "On" : "Off"],
+      ["Current state", trackingStatusLabel(tracking.status), trackingTone(tracking.status)],
+      ["First signal", formatDate(tracking.firstPixelLoadedAt) || "None"],
+      ["Last signal", formatDate(tracking.lastPixelLoadedAt) || "None"]
+    ];
+
+    return (
+      <div className="tracking-text-summary">
+        <div className="tracking-summary-top">
+          {message && (
+            <div className="tracking-email-context">
+              <strong>{message.subject || "(No subject)"}</strong>
+              <span>{message.recipient || "No recipient"}</span>
+              <span>Sent {formatDate(message.sentAt)}</span>
+            </div>
+          )}
+          <div className={`tracking-insight ${opened ? "green" : "blue"}`}>
+            <strong>{opened ? "Open activity found" : "Waiting for activity"}</strong>
+            <span>{insight}</span>
+          </div>
+        </div>
+        <div className="tracking-summary-body">
+          <div className="tracking-details-heading">
+            <h3>Tracking Details</h3>
+            <strong>{tracking.pixelLoadCount} {tracking.pixelLoadCount === 1 ? "signal" : "signals"}</strong>
+          </div>
+          <dl>
+            {rows.map(([label, value, tone]) => (
+              <div key={label}>
+                <dt>{label}</dt>
+                <dd className={tone || undefined}>{value}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+        <div className="tracking-events-text">
+          <h3>Signal History</h3>
+          {(tracking.recentEvents || []).length > 0 ? (
+            <ul>
+              {tracking.recentEvents.map((event) => (
+                <li key={event.id}>
+                  <strong>{eventSourceLabel(event.source)}</strong>
+                  <span>{event.imageFormat} · {formatDate(event.loadedAt)}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="subtle">No image-load signals detected.</p>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="phishing open-signals">
       <div className="metric-row">
@@ -2335,12 +3024,12 @@ function ScreenerView({
   onReject
 }) {
   return (
-    <div className="content-grid">
-      <section className="panel">
+    <section className="panel screener-decision-card">
+      <div className="screener-decision-section">
         <div className="panel-heading">
           <h2>Evaluate Sender</h2>
         </div>
-        <form className="stack" onSubmit={onEvaluate}>
+        <form className="stack sender-evaluate-form" onSubmit={onEvaluate}>
           <Field label="Sender">
             <input value={form.sender} onChange={(event) => setForm({ ...form, sender: event.target.value })} />
           </Field>
@@ -2352,9 +3041,9 @@ function ScreenerView({
           </Field>
           <button className="primary" type="submit">Evaluate</button>
         </form>
-      </section>
-
-      <section className="panel">
+      </div>
+      <div className="screener-decision-split" />
+      <div className="screener-decision-section">
         <div className="panel-heading">
           <h2>Decision</h2>
         </div>
@@ -2366,34 +3055,53 @@ function ScreenerView({
             onReject={onReject}
           />
         ) : (
-          <EmptyState label="No sender evaluated yet." />
-        )}
-      </section>
-
-      <section className="panel wide">
-        <div className="panel-heading">
-          <h2>Pending Senders</h2>
-          <button className="secondary" onClick={onRefresh}>Refresh</button>
-        </div>
-        {pending.length > 0 ? (
-          <div className="table-list">
-            {pending.map((entry) => (
-              <div className="table-row" key={entry.id}>
-                <div>
-                  <strong>{entry.senderEmail}</strong>
-                  <span>{entry.senderDomain}</span>
-                </div>
-                <div className="actions">
-                  <button onClick={() => onApproveSender(entry.id)}>Approve sender</button>
-                  <button onClick={() => onApproveDomain(entry.id)}>Approve domain</button>
-                  <button className="danger" onClick={() => onReject(entry.id)}>Reject</button>
-                </div>
-              </div>
-            ))}
+          <div className="decision-placeholder">
+            <strong>No sender evaluated</strong>
+            <span>Run an evaluation to see trust status, risk score, and available actions here.</span>
           </div>
-        ) : (
-          <EmptyState label="No pending senders." />
         )}
+      </div>
+    </section>
+  );
+}
+
+function ScreenerTrustView({
+  form,
+  setForm,
+  evaluation,
+  pending,
+  onEvaluate,
+  onRefresh,
+  onApproveSender,
+  onApproveDomain,
+  onReject,
+  trust,
+  onRefreshTrust,
+  onTrustSender,
+  onTrustDomain
+}) {
+  return (
+    <div className="screener-trust-workspace">
+      <ScreenerView
+        form={form}
+        setForm={setForm}
+        evaluation={evaluation}
+        pending={pending}
+        onEvaluate={onEvaluate}
+        onRefresh={onRefresh}
+        onApproveSender={onApproveSender}
+        onApproveDomain={onApproveDomain}
+        onReject={onReject}
+      />
+      <section className="panel screener-trust-bottom-card">
+        <div className="screener-trust-column trust-side">
+          <TrustView
+            trust={trust}
+            onRefresh={onRefreshTrust}
+            onTrustSender={onTrustSender}
+            onTrustDomain={onTrustDomain}
+          />
+        </div>
       </section>
     </div>
   );
@@ -2436,33 +3144,36 @@ function TrustView({ trust, onRefresh, onTrustSender, onTrustDomain }) {
 
   return (
     <div className="content-grid">
-      <section className="panel">
-        <div className="panel-heading">
-          <h2>Add Trust</h2>
-        </div>
-        <div className="stack">
-          <Field label="Sender">
-            <div className="inline-form">
-              <input value={sender} onChange={(event) => setSender(event.target.value)} />
-              <button onClick={() => onTrustSender(sender)}>Trust</button>
+      <section className="panel trust-joined-panel">
+        <div className="trust-layout">
+          <div className="trust-left-column">
+            <div className="panel-heading">
+              <div>
+                <h2>Trust</h2>
+                <p className="subtle">Approved senders and domains.</p>
+              </div>
             </div>
-          </Field>
-          <Field label="Domain">
-            <div className="inline-form">
-              <input value={domain} onChange={(event) => setDomain(event.target.value)} />
-              <button onClick={() => onTrustDomain(domain)}>Trust</button>
+            <div className="stack joined-panel-section trust-control-rows">
+              <Field label="Domain">
+                <div className="inline-form">
+                  <input value={domain} onChange={(event) => setDomain(event.target.value)} />
+                  <button onClick={() => onTrustDomain(domain)}>Trust</button>
+                </div>
+              </Field>
+              <Field label="Sender">
+                <div className="inline-form">
+                  <input value={sender} onChange={(event) => setSender(event.target.value)} />
+                  <button onClick={() => onTrustSender(sender)}>Trust</button>
+                </div>
+              </Field>
             </div>
-          </Field>
+          </div>
+          <div className="trust-right-column">
+            <TrustList title="Domains" entries={trust.domains || []} />
+            <div className="joined-section-divider" />
+            <TrustList title="Senders" entries={trust.senders || []} />
+          </div>
         </div>
-      </section>
-
-      <section className="panel">
-        <div className="panel-heading">
-          <h2>Trusted</h2>
-          <button className="secondary" onClick={onRefresh}>Refresh</button>
-        </div>
-        <TrustList title="Senders" entries={trust.senders || []} />
-        <TrustList title="Domains" entries={trust.domains || []} />
       </section>
     </div>
   );
@@ -2470,14 +3181,20 @@ function TrustView({ trust, onRefresh, onTrustSender, onTrustDomain }) {
 
 function DecisionCard({ evaluation, onApproveSender, onApproveDomain, onReject }) {
   const entry = evaluation.entry;
+  const phishing = evaluation.phishing || {};
+  const signals = phishing.signals || [];
 
   return (
     <div className="decision-card">
-      <div className="decision-top">
-        <span className={`risk ${riskClass(evaluation.phishing?.riskLevel)}`}>
-          {evaluation.phishing?.riskLevel || "LOW"}
-        </span>
-        <span>{evaluation.status}</span>
+      <div className="decision-summary">
+        <div>
+          <span>Status</span>
+          <strong>{workflowLabel(evaluation.status)}</strong>
+        </div>
+        <div>
+          <span>Trust</span>
+          <strong>{trustLabel(phishing.trust)}</strong>
+        </div>
       </div>
       {entry && (
         <div className="identity">
@@ -2485,7 +3202,22 @@ function DecisionCard({ evaluation, onApproveSender, onApproveDomain, onReject }
           <span>{entry.senderDomain}</span>
         </div>
       )}
-      <PhishingSummary phishing={evaluation.phishing} compact />
+      <div className="decision-signals">
+        <h3>Signals</h3>
+        {signals.length > 0 ? (
+          signals.slice(0, 3).map((signal) => (
+            <div className="decision-signal-row" key={signal.code}>
+              <strong>{signal.code}</strong>
+              <span>{signal.description}</span>
+            </div>
+          ))
+        ) : (
+          <div className="decision-signal-row muted">
+            <strong>Clean</strong>
+            <span>No suspicious signals detected.</span>
+          </div>
+        )}
+      </div>
       {entry && evaluation.requiresDecision && (
         <div className="actions stretch">
           <button onClick={() => onApproveSender(entry.id)}>Approve sender</button>
@@ -2540,7 +3272,7 @@ function TrustList({ title, entries }) {
       <h3>{title}</h3>
       {entries.length > 0 ? (
         entries.map((entry) => (
-          <div className="trust-row" key={entry.id}>
+          <div className="joined-list-row trust-row" key={entry.id}>
             <strong>{entry.value}</strong>
             <span>{entry.scope}</span>
           </div>
@@ -2552,21 +3284,57 @@ function TrustList({ title, entries }) {
   );
 }
 
-function NavGroup({ title, items, activeView, setActiveView }) {
+function NavGroup({ title, items, activeView, setActiveView, toggleNavigation }) {
   return (
     <div className="nav-group">
       <span>{title}</span>
-      {items.map(([key, label]) => (
+      {items.map(([key, label, icon]) => (
         <button
           key={key}
           className={activeView === key ? "active" : ""}
           onClick={() => setActiveView(key)}
+          onDoubleClick={toggleNavigation}
+          aria-current={activeView === key ? "page" : undefined}
+          aria-label={label}
+          title={label}
         >
-          {label}
+          <NavIcon name={icon} />
+          <span className="nav-label">{label}</span>
         </button>
       ))}
     </div>
   );
+}
+
+function NavIcon({ name }) {
+  const paths = {
+    menu: <><path d="M4 7h16M4 12h16M4 17h16" /></>,
+    collapse: <><path d="M15 5l-7 7 7 7" /><path d="M20 5l-7 7 7 7" /></>,
+    attention: <><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" /><path d="M10 21h4" /></>,
+    compose: <><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z" /></>,
+    drafts: <><path d="M6 2h9l4 4v16H6z" /><path d="M14 2v5h5M9 12h6M9 16h6" /></>,
+    templates: <><rect x="4" y="4" width="16" height="16" rx="2" /><path d="M4 9h16M9 9v11" /></>,
+    contacts: <><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" /></>,
+    scheduled: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>,
+    tracking: <><path d="M4 17c5-8 11-8 16 0" /><path d="M9 17a3 3 0 0 1 6 0" /><path d="M12 17h.01" /></>,
+    screener: <><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10" /><path d="m9 12 2 2 4-4" /></>,
+    trust: <><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10" /><path d="M9 12h6M12 9v6" /></>,
+    moon: <><path d="M21 12.8A8.6 8.6 0 1 1 11.2 3a6.7 6.7 0 0 0 9.8 9.8Z" /></>,
+    sun: <><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" /></>
+  };
+  return (
+    <svg className="nav-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      {paths[name] || paths.menu}
+    </svg>
+  );
+}
+
+function AccountAvatar({ account }) {
+  if (account?.picture) {
+    return <img className="avatar compact" src={account.picture} alt="" />;
+  }
+  const initial = account?.email?.slice(0, 1).toUpperCase() || "?";
+  return <span className="avatar compact placeholder" aria-hidden="true">{initial}</span>;
 }
 
 function AccountCard({ account }) {
@@ -2612,36 +3380,68 @@ function EmptyState({ label, small = false }) {
 
 function viewTitle(view) {
   const titles = {
-    inbox: "Inbox / Process",
-    search: "Search",
-    compose: "Compose / Send",
-    drafts: "Drafts",
+    inbox: "Attention",
+    search: "Search results",
+    compose: "Compose",
+    drafts: "Drafts & Scheduled",
     manage: "Manage",
-    templates: "Templates",
-    groups: "Contacts",
-    scheduled: "Scheduled",
-    tracking: "Open Signals",
-    screener: "Screener",
-    security: "Security signals",
-    trust: "Sender trust"
+    templates: "Templates & Groups",
+    groups: "Templates & Groups",
+    trust: "Screener & Trust",
+    tracking: "Sent Activity",
+    screener: "Screener & Trust",
+    security: "Security signals"
   };
   return titles[view] || "Workspace";
 }
 
 function modeLabel(view) {
-  if (["compose", "drafts", "templates", "scheduled"].includes(view)) {
+  if (["compose", "drafts", "templates", "groups"].includes(view)) {
     return "Create";
-  }
-  if (["groups"].includes(view)) {
-    return "Relationships";
   }
   if (view === "manage") {
     return "Control";
   }
-  if (["tracking", "security", "trust"].includes(view)) {
-    return "Signals";
+  if (view === "tracking") {
+    return "Manage";
   }
-  return "Process";
+  if (["security", "trust"].includes(view)) {
+    return "Safety";
+  }
+  return "Workspace";
+}
+
+function readThemePreference() {
+  try {
+    const saved = window.localStorage.getItem(themeStorageKey);
+    if (saved === "dark" || saved === "light") {
+      return saved;
+    }
+  } catch {
+    // Fall through to system preference.
+  }
+  if (typeof window !== "undefined" && window.matchMedia?.("(prefers-color-scheme: dark)").matches) {
+    return "dark";
+  }
+  return "light";
+}
+
+function readTrackedMessageLinks() {
+  try {
+    const value = window.localStorage.getItem(trackingLinkStorageKey);
+    const links = value ? JSON.parse(value) : [];
+    return Array.isArray(links) ? links : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeTrackedMessageLinks(links) {
+  try {
+    window.localStorage.setItem(trackingLinkStorageKey, JSON.stringify(links));
+  } catch {
+    // Signal details still work during this session if browser storage is unavailable.
+  }
 }
 
 function parseList(value) {
@@ -2839,6 +3639,32 @@ function riskClass(level) {
   return "low";
 }
 
+function riskScoreClass(score) {
+  if (score == null) {
+    return "neutral";
+  }
+  if (score >= 70) {
+    return "high";
+  }
+  if (score >= 35) {
+    return "medium";
+  }
+  return "low";
+}
+
+function riskScoreLabel(score) {
+  if (score == null) {
+    return "Unknown";
+  }
+  if (score >= 70) {
+    return "High";
+  }
+  if (score >= 35) {
+    return "Moderate";
+  }
+  return "Low";
+}
+
 function trustLabel(trust) {
   if (!trust) {
     return "None";
@@ -2914,7 +3740,7 @@ function statusTone(value) {
     CANCELLED: "soft",
     CANCELED: "soft"
   };
-  return tones[value] || "neutral";
+  return tones[String(value || "").toUpperCase()] || "neutral";
 }
 
 function trackingTone(value) {
@@ -2922,7 +3748,7 @@ function trackingTone(value) {
     return "green";
   }
   if (value === "AWAITING_IMAGE_LOAD") {
-    return "blue";
+    return "amber";
   }
   return "neutral";
 }
@@ -2966,10 +3792,12 @@ function workflowLabel(value) {
     ARCHIVED: "Archived",
     SNOOZED: "Snoozed",
     PENDING: "Pending",
+    CANCELLED: "Canceled",
+    CANCELED: "Canceled",
     APPROVED: "Approved",
     REJECTED: "Rejected"
   };
-  return labels[value] || "Not set";
+  return labels[String(value || "").toUpperCase()] || "Not set";
 }
 
 createRoot(document.getElementById("root")).render(<App />);
